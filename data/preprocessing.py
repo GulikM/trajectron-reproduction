@@ -3,17 +3,14 @@ import pathlib
 
 from itertools import product
 
-FRAME_FREQUENCY = 10 # [1/s] 
-# use to convert consecutive timestamps into delta time [s]
+DELTA_TIMESTAMP = 0.1 # 10 milllis in between frames 
 
-# data source
-inpath = pathlib.Path(r'./trajectron-reproduction\data\pedestrians\eth\train\biwi_hotel_train.txt')
-# headers
-colnames = ['t', 'id', 'x', 'y']
+path = pathlib.Path(r'.\trajectron-reproduction\data\pedestrians\eth\train\biwi_hotel_train.txt') # data source
 
+colnames = ['t', 'id', 'x', 'y'] # headers
 
-with open(inpath) as infile:
-    df = pd.read_csv(infile, sep='\t', names=colnames)
+with open(path) as f:
+    df = pd.read_csv(f, delimiter='\t', names=colnames)
     
     timestamps = df['t'].unique() 
     ids = df['id'].unique()
@@ -29,7 +26,7 @@ with open(inpath) as infile:
         df.loc[rows.index, 'dx'] = rows['x'].diff()
         df.loc[rows.index, 'dy'] = rows['y'].diff()
         # add delta time between consecutive frames
-        df.loc[rows.index, 'dt'] = rows['t'].diff() / FRAME_FREQUENCY
+        df.loc[rows.index, 'dt'] = rows['t'].diff() * DELTA_TIMESTAMP
         # convert delta position to velocity
         df['dx'] /= df['dt']
         df['dy'] /= df['dt']
@@ -37,8 +34,8 @@ with open(inpath) as infile:
     # replace NaN elements with zero
     df = df.fillna(0)
     # note: velocities for the agents that just arrived in the scene are set to zero,
-    # even thought there is no way for us to know what the position of the agent was
+    # even though there is no way for us to know what the position of the agent was
     # before it arrived on the scene.
 
     # save
-    df.to_csv(inpath.parent / (inpath.stem + '.csv'))
+    df.to_csv(path.parent / (path.stem + '.csv'), index=False)
