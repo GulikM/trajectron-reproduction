@@ -45,6 +45,26 @@ for epoch in range(num_epochs):
     optimizer.step()
     if epoch % 100 == 0:
       print("Epoch: %d, loss: %1.5f" % (epoch, loss.item()))
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
 
 
 def main():
@@ -436,12 +456,3 @@ def main():
 
         if args.save_every is not None and args.debug is False and epoch % args.save_every == 0:
             model_registrar.save_models(epoch)
-
-
-
-
-
-
-
-
-
