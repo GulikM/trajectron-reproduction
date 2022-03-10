@@ -11,12 +11,7 @@ Beun script to try out the GNU decoder part of trajectron
 # import torch.nn as nn
 
 
-# L = 10 # sequence length, for example 10 time frames
-# N = 20 # batch size; number robots / datapoints?
-# D = 1 # one directional GRU, 2 for bidrectional
-# H_in = 4 # input size: ? [e_x_R;z;y(t)]
-# H_out = 128 # hidden size
-# layers = 1
+
 
 # rnn   = nn.GRU(H_in, H_out, num_layers = layers) # initiate GRU object structure
 # input = torch.randn(L, N, H_in) # generate some random input
@@ -38,82 +33,53 @@ import torchvision.transforms as transforms
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Hyper-parameters 
-# input_size = 784 # 28x28
-num_classes = 10
+
+num_par = 10 # output
 num_epochs = 2
 batch_size = 100
 learning_rate = 0.001
-
-input_size = 28
-sequence_length = 28
+input_size = 4
+sequence_length = 10
 hidden_size = 128
-num_layers = 2
+num_layers = 1
 
-# MNIST dataset 
-train_dataset = torchvision.datasets.MNIST(root='./data', 
-                                           train=True, 
-                                           transform=transforms.ToTensor(),  
-                                           download=True)
-
-test_dataset = torchvision.datasets.MNIST(root='./data', 
-                                          train=False, 
-                                          transform=transforms.ToTensor())
-
-# Data loader
-train_loader = torch.utils.data.DataLoader(dataset=train_dataset, 
-                                           batch_size=batch_size, 
-                                           shuffle=True)
-
-test_loader = torch.utils.data.DataLoader(dataset=test_dataset, 
-                                          batch_size=batch_size, 
-                                          shuffle=False)
+# Data 
+input = torch.randn(sequence_length, batch_size, hidden_size) # generate some random input
 
 
 # Fully connected neural network with one hidden layer
-class RNN(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, num_classes):
-        super(RNN, self).__init__()
+class GRU(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, num_par):
+        super(GRU, self).__init__()
         self.num_layers = num_layers
         self.hidden_size = hidden_size
-        self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True)
-        # -> x needs to be: (batch_size, seq, input_size)
-        
-        # or:
-        #self.gru = nn.GRU(input_size, hidden_size, num_layers, batch_first=True)
-        #self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
-        self.fc = nn.Linear(hidden_size, num_classes)
+        self.GRU = nn.GRU(input_size, hidden_size, num_layers)
+
+        self.fc = nn.Linear(hidden_size, num_par)
         
     def forward(self, x):
-        # Set initial hidden states (and cell states for LSTM)
+        # Set initial hidden states 
         h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(device) 
-        #c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(device) 
-        
-        # x: (n, 28, 28), h0: (2, n, 128)
         
         # Forward propagate RNN
-        out, _ = self.rnn(x, h0)  
-        # or:
-        #out, _ = self.lstm(x, (h0,c0))  
-        
-        # out: tensor of shape (batch_size, seq_length, hidden_size)
-        # out: (n, 28, 128)
+        out, _ = self.GRU(x, h0)  
         
         # Decode the hidden state of the last time step
-        out = out[:, -1, :]
+        out = out[:, -1, :] # this means many to one!
         # out: (n, 128)
          
         out = self.fc(out)
         # out: (n, 10)
         return out
 
-model = RNN(input_size, hidden_size, num_layers, num_classes).to(device)
+model = GRU(input_size, hidden_size, num_layers, num_par).to(device)
 
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)  
 
 # Train the model
-n_total_steps = len(train_loader)
+n_total_steps = batch_size
 for epoch in range(num_epochs):
     for i, (images, labels) in enumerate(train_loader):  
         # origin shape: [N, 1, 28, 28]
