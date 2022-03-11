@@ -2,54 +2,10 @@ import pandas as pd
 import pathlib
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
+import torch.nn as nn
 
 from itertools import product
-
-# FRAME_FREQUENCY = 10 # [1/s] 
-# # use to convert consecutive timestamps into delta time [s]
-
-# # data source
-# #inpath = pathlib.Path(r'./data\pedestrians\eth\train\biwi_hotel_train.txt')
-# inpath = pathlib.Path('C:/Users/maart/Documents/GitHub/Trajectron-reproduction/data/pedestrians/eth/train/biwi_hotel_train.txt')
-# # headers
-# colnames = ['t', 'id', 'x', 'y']
-
-
-# with open(inpath) as infile:
-#     df = pd.read_csv(infile, sep='\t', names=colnames)
-    
-#     timestamps = df['t'].unique() 
-#     ids = df['id'].unique()
-
-#     idxs = list(product(timestamps, ids))
-    
-#     df = df.set_index(['t', 'id']).reindex(idxs).reset_index()
-
-#     for id in ids:
-        
-#         # select rows for a specific id
-#         rows = df.loc[df['id'] == id]
-#         # add delta position between consecutive frames
-#         df.loc[rows.index, 'dx'] = rows['x'].diff()
-#         df.loc[rows.index, 'dy'] = rows['y'].diff()
-#         # add delta time between consecutive frames
-#         df.loc[rows.index, 'dt'] = rows['t'].diff() / FRAME_FREQUENCY
-#         # convert delta position to velocity
-#         df['dx'] /= df['dt']
-#         df['dy'] /= df['dt']
-
-#     # replace NaN elements with zero
-#     df = df.fillna(0)
-#     # fix time
-#     df['t'] = df['t']/10
-#     # note: velocities for the agents that just arrived in the scene are set to zero,
-#     # even thought there is no way for us to know what the position of the agent was
-#     # before it arrived on the scene.
-
-#     # save
-#    # df.to_csv(inpath.parent / (inpath.stem + '.csv'))
-   
-   
 
 
 def import_ped_data(path, safe=False):
@@ -78,15 +34,18 @@ for i in range(10):
     plot_node(df,i)
 
 
-
-
 def get_node_batch_data(df, node, t, H, F):
     """
     Generate training data X and y for timestep t + history/future:
-    X: (H+1)xD, with H timesteps in history and D node states
-    y: (F+1)xD, with F timesteps in future and D node states
+    X: (H)xD, with H timesteps in history and D node states
+    y: (F)xD, with F timesteps in future and D node states
 
     Returns batch_X, batch_y
+    
+    Seq x batch x states
+    
+    
+    TODO: add velocities to data
 
 """
     D = df.shape[1] # dimensions state space, should be 4
@@ -117,18 +76,63 @@ def get_node_batch_data(df, node, t, H, F):
     batch_y = np.array([x, y]).T
 
     return batch_X, batch_y
-
-H,F = 3, 3
-for t in range(0, int(df['t'].values[-1] + 1)):
-    for ID in range(1, int(df['id'].values[-1]+1)):
-        X,y = get_node_batch_data(df,ID,t,H,F)
-        
-        if (len(X)==H and len(y)==F):
-            print(X.shape)
-            
-for ID in range(1, int(df['id'].values[-1]+1)):
-    X,y = get_node_batch_data(df,ID,t,H,F)
     
+
+def get_node_batches(df, node, H, F):
+    """
+    Collects training data (stacked batches) of node i 
+    over all timesteps t with enough data
+
+    Returns trainX, trainY
+
+"""
+    D = df.shape[1] # dimensions state space, should be 4
+    
+    trainX = []
+    trainY = []
+    
+    df_node = df.loc[df['id'] == node] # data for node i
+    trange  = df_node['t'].values
+    for t in trange:
+        batchX, batchY = get_node_batch_data(df, node, t, H, F)
+        if (len(batchX)==H and len(batchY)==F):  
+            trainX.append(batchX)
+            trainY.append(batchY)
+            
+    return np.array(trainX), np.array(trainY)
+
+def get_batches(df, H, F):
+    """
+    Collects training data (stacked batches) of all nodes
+    
+    returns: 
+        tensor trainX = seq x batchsize x D
+        tensor trainY = seq x batchsize x D
+
+"""
+    X,Y = get_node_batches(df, 11, H=3, F=3)   # fill array with some value to init
+    assert (len(X)>0)
+    H_in = X.shape[2]
+    
+    for node in range(1, int(df['id'].values[-1]+1)):  
+        trainX,trainY = get_node_batches(df, node, H=3, F=3)      
+        batchsize = len(trainX)        
+        if batchsize > 0:
+            X = np.concatenate([X, trainX], axis = 0)
+            Y = np.concatenate([Y, trainY], axis = 0)
+
+    X = torch.reshape(torch.tensor(X),(H,-1,H_in))
+    Y = torch.reshape(torch.tensor(Y),(H,-1,H_in))
+    
+    return X, Y
+
+X, Y = get_batches(df, H=3, F=3)
+
+
+
+
+
+
 
 
 
