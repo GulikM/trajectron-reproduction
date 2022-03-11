@@ -109,7 +109,7 @@ def get_batches(df, H, F):
         tensor trainX = seq x batchsize x D
         tensor trainY = seq x batchsize x D
 
-"""
+    """
     X,Y = get_node_batches(df, 11, H=3, F=3)   # fill array with some value to init
     assert (len(X)>0)
     H_in = X.shape[2]
