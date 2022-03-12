@@ -21,7 +21,9 @@ def import_ped_data(path, safe=False):
     
     return df
     
-inpath = pathlib.Path('C:/Users/maart/Documents/GitHub/Trajectron-reproduction/data/pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
+#inpath = pathlib.Path('C:/Users/maart/Documents/GitHub/Trajectron-reproduction/data/pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
+inpath = pathlib.Path('data/pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
+
 df = import_ped_data(inpath)
 
     
@@ -127,6 +129,9 @@ def get_batches(df, H, F):
     return X, Y
 
 X, Y = get_batches(df, H=3, F=3)
+
+print(X.shape)
+print(Y.shape)
 
 
 
