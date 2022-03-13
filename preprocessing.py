@@ -4,9 +4,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
-
 from itertools import product
 import os
+
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 
@@ -23,20 +23,6 @@ def import_ped_data(path, safe=False):
     
     return df
     
-#inpath = pathlib.Path('C:/Users/maart/Documents/GitHub/Trajectron-reproduction/data/pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
-# inpath = pathlib.Path('data/pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
-
-# df = import_ped_data(inpath)
-
-    
-
-# def plot_node(df, i):
-#     df_i = df.loc[df['id'] == int(i)]
-#     plt.scatter(df_i['x'],df_i['y'], s=df_i['t'])
-    
-# for i in range(10):
-#     plot_node(df,i)
-
 
 def get_node_batch_data(df, node, t, H, F):
     """
@@ -51,8 +37,8 @@ def get_node_batch_data(df, node, t, H, F):
     
     TODO: add velocities to data
 
-"""
-    D = df.shape[1] # dimensions state space, should be 4
+    """
+    D = df.shape[1] # dimensions state space, should be 4; #TODO: remove harcoding of D
     
     df_node = df.loc[df['id'] == node] # data for node i
     df_seq_X = df_node.loc[df_node['t'] > t-H]  # data of node i for sequence [t-H,t]
@@ -81,7 +67,6 @@ def get_node_batch_data(df, node, t, H, F):
 
     return batch_X, batch_y
     
-
 def get_node_batches(df, node, H, F):
     """
     Collects training data (stacked batches) of node i 
@@ -90,7 +75,7 @@ def get_node_batches(df, node, H, F):
     Returns trainX, trainY
 
 """
-    D = df.shape[1] # dimensions state space, should be 4
+    D = df.shape[1] # dimensions state space, should be 4 #TODO: remove harcoding of D
     
     trainX = []
     trainY = []
@@ -114,26 +99,27 @@ def get_batches(df, H, F):
         tensor trainY = seq x batchsize x D
 
     """
-    X,Y = get_node_batches(df, 11, H=3, F=3)   # fill array with some value to init
-    assert (len(X)>0)
+    D = df.shape[1] # dimensions state space, should be 4. #TODO:  remove hardcoding of D
+    D = 2
+    # init iteration over nodes with zeros so we can concatenate the data in the loop
+    X = np.zeros((1,H,D))
+    Y = np.zeros((1,F,D))
+
     H_in = X.shape[2]
     
     for node in range(1, int(df['id'].values[-1]+1)):  
-        trainX,trainY = get_node_batches(df, node, H=3, F=3)      
+        trainX,trainY = get_node_batches(df, node, H=H, F=F)      
         batchsize = len(trainX)        
         if batchsize > 0:
             X = np.concatenate([X, trainX], axis = 0)
             Y = np.concatenate([Y, trainY], axis = 0)
 
     X = torch.reshape(torch.tensor(X),(H,-1,H_in))
-    Y = torch.reshape(torch.tensor(Y),(H,-1,H_in))
+    Y = torch.reshape(torch.tensor(Y),(F,-1,H_in))
+    X = X.type(torch.FloatTensor)
+    Y = Y.type(torch.FloatTensor)
     
     return X, Y
-
-# X, Y = get_batches(df, H=3, F=3)
-
-# print(X.shape)
-# print(Y.shape)
 
 
 
