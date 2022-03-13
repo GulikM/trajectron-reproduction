@@ -4,13 +4,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
-
 from itertools import product
 
+import os
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 def import_ped_data(path, safe=False):
     colnames = ['t', 'id', 'x', 'y']
-    with open(inpath) as infile:
+    with open(path) as infile:
         df = pd.read_csv(infile, sep='\t', names=colnames)
         
     # convert time to seconds
@@ -21,17 +22,17 @@ def import_ped_data(path, safe=False):
     
     return df
     
-inpath = pathlib.Path('C:/Users/maart/Documents/GitHub/Trajectron-reproduction/data/pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
-df = import_ped_data(inpath)
+# inpath = pathlib.Path('C:/Users/maart/Documents/GitHub/Trajectron-reproduction/data/pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
+# df = import_ped_data(inpath)
 
     
 
-def plot_node(df, i):
-    df_i = df.loc[df['id'] == int(i)]
-    plt.scatter(df_i['x'],df_i['y'], s=df_i['t'])
+# def plot_node(df, i):
+#     df_i = df.loc[df['id'] == int(i)]
+#     plt.scatter(df_i['x'],df_i['y'], s=df_i['t'])
     
-for i in range(10):
-    plot_node(df,i)
+# for i in range(10):
+#     plot_node(df,i)
 
 
 def get_node_batch_data(df, node, t, H, F):
@@ -126,7 +127,7 @@ def get_batches(df, H, F):
     
     return X, Y
 
-X, Y = get_batches(df, H=3, F=3)
+# X, Y = get_batches(df, H=3, F=3)
 
 
 
