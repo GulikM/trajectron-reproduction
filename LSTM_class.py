@@ -46,28 +46,45 @@ class LSTM(nn.Module):
         out = []
 
         data = x
+        
+        # try using only 2 (x,y) hiddem dimensions; outputs
+        # make sure c0 and h0 keep the right shape:
+        h_0 = torch.reshape(h_0, (self.num_layers, x.size(0), self.hidden_size))
+        c_0 = torch.reshape(c_0, (self.num_layers, x.size(0), self.hidden_size))
+        
+        y, (h_out, c_out) = self.lstm(data, (h_0, c_0))  
+        
+        out = y
 
-        # Propagate input through LSTM
-        for i in range(F):
             
-            ula, (h_out, c_out) = self.lstm(data, (h_0, c_0))  
-
-            h_out = h_out.view(-1, self.hidden_size)
-            
-            # Adjust the states (short term and long term) to predict the next time step
-            h_0 = h_out
-            c_0 = c_out
-
-            # Predict time step and append predicted time step to the sequence
-            output = self.fc(h_out)
-            out.append(output)
-            
-            print(data.shape)
             # Make the new sequence to predict the next time step
-            data = torch.FloatTensor(data[-2, -1, output])
+            # data = torch.FloatTensor(data[-2, -1, output])
 
+        # # Propagate input through LSTM
+        # for i in range(F):
             
-        out = torch.FloatTensor(out)
+        #     # make sure c0 and h0 keep the right shape:
+        #     h_0 = torch.reshape(h_0, (self.num_layers, x.size(0), self.hidden_size))
+        #     c_0 = torch.reshape(c_0, (self.num_layers, x.size(0), self.hidden_size))
+            
+        #     ula, (h_out, c_out) = self.lstm(data, (h_0, c_0))  
+
+        #     print(ula.shape)
+        #     h_out = h_out.view(-1, self.hidden_size)
+            
+        #     # Adjust the states (short term and long term) to predict the next time step
+        #     h_0 = h_out
+        #     c_0 = c_out
+
+        #     # Predict time step and append predicted time step to the sequence
+        #     output = self.fc(h_out)
+        #     print(output.shape)
+        #     out.append(output)
+            
+        #     # Make the new sequence to predict the next time step
+        #     # data = torch.FloatTensor(data[-2, -1, output])
+# 
+        # out = torch.stack(out)
         return out
 
 
@@ -79,15 +96,14 @@ X, Y = get_batches(df, H=3, F=3)
 
 X = X.type(torch.FloatTensor)
 Y = Y.type(torch.FloatTensor)
-print(X.shape)
-print(Y.shape)
+
 
 
 num_epochs = 100
 learning_rate = 0.01
 
 input_size = 2
-hidden_size = 32
+hidden_size = 2
 num_layers = 1
 H = 3
 F = 3
@@ -100,32 +116,39 @@ optimizer = torch.optim.Adam(lstm.parameters(), lr=learning_rate)
 #optimizer = torch.optim.SGD(lstm.parameters(), lr=learning_rate)
 
 # Train the model
+losses = []
 for epoch in range(num_epochs):
     outputs = lstm(X)
     optimizer.zero_grad()
-    
     # obtain the loss function
     loss = criterion(outputs, Y)
-    
-    loss.backward()
-    
+    loss.backward()   
     optimizer.step()
-    if epoch % 100 == 0:
-      print("Epoch: %d, loss: %1.5f" % (epoch, loss.item()))
+    losses.append(loss.item())
+    print("Epoch: %d, loss: %1.5f" % (epoch, loss.item()))
 
 # Evaluate on entire data set for comparison train and test
 lstm.eval()
-train_predict = lstm()
+train_predict = lstm(X)
 
 data_predict = train_predict.data.numpy()
-print(data_predict.shape)
-dataY_plot = Y.data.numpy()
+data_true = Y.data.numpy()
 
-train_size = len(X)
+# let's visualize one prediction step of one state:
+state = 0 # x
+time  = 0 # prediction for t1
 
-plt.axvline(x=train_size, c='r', linestyle='--')
-
-plt.plot(dataY_plot)
-plt.plot(data_predict)
-plt.suptitle('Time-Series Prediction')
+plt.figure
+plt.plot(data_true[time, :, state], 'r', label = 'true state_{} at future_step{}'.format(state,time))
+plt.plot(data_predict[time, :, state], 'r--', label = 'prediction state_{} at future_step{}'.format(state,time))
+plt.suptitle('train predictions')
+plt.xlabel('batch')
+plt.ylabel('state [m]')
 plt.show()
+plt.legend()
+
+# plot loss
+plt.figure
+plt.plot(losses)
+plt.xlabel('epochs')
+plt.ylabel('training loss')
