@@ -42,30 +42,32 @@ class LSTM(nn.Module):
 
         out = []
 
-        data = x
-        print(data.shape)
+
+        
         # Propagate input through LSTM
         for i in range(F):
             
-            ula, (h_out, c_out) = self.lstm(data, (h_0, c_0))  
-
+            ula, (h_out, c_out) = self.lstm(x, (h_0, c_0))  
             h_out = h_out.view(-1, self.hidden_size)
             
             # Adjust the states (short term and long term) to predict the next time step
             h_0 = h_out
             c_0 = c_out
 
+            # make sure c0 and h0 keep the right shape:
+            h_0 = torch.reshape(h_0, (self.num_layers, x.size(1), self.hidden_size))
+            c_0 = torch.reshape(c_0, (self.num_layers, x.size(1), self.hidden_size))
+
             # Predict time step and append predicted time step to the sequence
             output = self.fc(h_out)
             out.append(output)
             
-            print(data.shape)
             # Make the new sequence to predict the next time step
-            l =  [data[2, :, :], data[1, :, :], output]
+            l =  [x[2, :, :], x[1, :, :], output]
             data = torch.stack(l)
 
             
-        out = torch.FloatTensor(out)
+        out = torch.stack(out)
         return out
 
 
@@ -77,11 +79,8 @@ X, Y = get_batches(df, H=3, F=3)
 
 X = X.type(torch.FloatTensor)
 Y = Y.type(torch.FloatTensor)
-print(X.shape)
-print(Y.shape)
 
-
-num_epochs = 100
+num_epochs = 1000
 learning_rate = 0.01
 
 input_size = 2
@@ -113,17 +112,9 @@ for epoch in range(num_epochs):
 
 # Evaluate on entire data set for comparison train and test
 lstm.eval()
-train_predict = lstm()
+train_predict = lstm(X)
 
 data_predict = train_predict.data.numpy()
-print(data_predict.shape)
 dataY_plot = Y.data.numpy()
 
 train_size = len(X)
-
-plt.axvline(x=train_size, c='r', linestyle='--')
-
-plt.plot(dataY_plot)
-plt.plot(data_predict)
-plt.suptitle('Time-Series Prediction')
-plt.show()
