@@ -32,21 +32,18 @@ class LSTM(nn.Module):
         self.F = F
         
         self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size,
-                            num_layers=num_layers, batch_first=True)
+                            num_layers=num_layers, batch_first=False)
         
         self.fc = nn.Linear(hidden_size, num_classes)
 
     def forward(self, x):
-        h_0 = Variable(torch.zeros(
-            self.num_layers, x.size(0), self.hidden_size))
-        
-        c_0 = Variable(torch.zeros(
-            self.num_layers, x.size(0), self.hidden_size))
-        
+        h_0 = Variable(torch.zeros(self.num_layers, x.size(dim=1), self.hidden_size))
+        c_0 = Variable(torch.zeros(self.num_layers, x.size(dim=1), self.hidden_size))
+
         out = []
 
         data = x
-
+        print(data.shape)
         # Propagate input through LSTM
         for i in range(F):
             
@@ -64,7 +61,8 @@ class LSTM(nn.Module):
             
             print(data.shape)
             # Make the new sequence to predict the next time step
-            data = torch.FloatTensor(data[-2, -1, output])
+            l =  [data[2, :, :], data[1, :, :], output]
+            data = torch.stack(l)
 
             
         out = torch.FloatTensor(out)

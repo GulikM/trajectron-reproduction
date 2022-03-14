@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 from sklearn.preprocessing import MinMaxScaler
 
-training_set = pd.read_csv('monthly-beer-production-in-austr.csv')
+training_set = pd.read_csv('data/monthly-beer-production-in-austr.csv')
 
 training_set = training_set.iloc[:,1:2].values
 
@@ -55,7 +55,7 @@ class LSTM(nn.Module):
         self.seq_length = seq_length
         
         self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size,
-                            num_layers=num_layers, batch_first=True)
+                            num_layers=num_layers, batch_first=False)
         
         self.fc = nn.Linear(hidden_size, num_classes)
 
@@ -107,6 +107,8 @@ for epoch in range(num_epochs):
 
 lstm.eval()
 train_predict = lstm(dataX)
+print(dataX.shape)
+print(train_predict.shape)
 
 data_predict = train_predict.data.numpy()
 print(data_predict.shape)
