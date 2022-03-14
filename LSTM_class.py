@@ -83,7 +83,9 @@ criterion = torch.nn.MSELoss()    # mean-squared error for regression
 optimizer = torch.optim.Adam(lstm.parameters(), lr=learning_rate)
 
 # Train the model
-losses = []
+losses_train = []
+losses_val   = []
+
 for epoch in range(num_epochs):
     outputs = lstm(X_train)
     optimizer.zero_grad()
@@ -91,7 +93,10 @@ for epoch in range(num_epochs):
     loss = criterion(outputs, Y_train)
     loss.backward()   
     optimizer.step()
-    losses.append(loss.item())
+    losses_train.append(loss.item())
+    loss_val = criterion(lstm(X_val), Y_val)
+    losses_val.append(loss_val.item())
+    
     print("Epoch: %d, loss: %1.5f" % (epoch, loss.item()))
 
 # Evaluate on entire data set for comparison train and test
@@ -132,8 +137,10 @@ plt.legend()
 
 
 
-# plot loss
+# plot losses
 plt.figure()
-plt.plot(losses)
+plt.plot(losses_train, label = 'training loss')
+plt.plot(losses_val, label = 'validation loss')
 plt.xlabel('epochs')
-plt.ylabel('training loss')
+plt.ylabel('loss')
+plt.legend()

@@ -74,7 +74,7 @@ def get_node_batches(df, node, H, F):
 
     Returns trainX, trainY
 
-"""
+    """
     D = df.shape[1] # dimensions state space, should be 4 #TODO: remove harcoding of D
     
     trainX = []
