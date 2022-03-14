@@ -55,7 +55,7 @@ class LSTM(nn.Module):
         self.seq_length = seq_length
         
         self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size,
-                            num_layers=num_layers, batch_first=False)
+                            num_layers=num_layers, batch_first=True)
         
         self.fc = nn.Linear(hidden_size, num_classes)
 
