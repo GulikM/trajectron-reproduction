@@ -6,6 +6,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 from preprocessing import get_batches
 from preprocessing import import_ped_data
+from visualization import evaluate_model
 import pandas as pd
 import pathlib
 
@@ -144,3 +145,6 @@ plt.plot(losses_val, label = 'validation loss')
 plt.xlabel('epochs')
 plt.ylabel('loss')
 plt.legend()
+
+evaluate_model(lstm, df_train, 25)
+
