@@ -6,11 +6,8 @@ class NetworkComponent(object):
         self.input_dim = input_dim
         self.output_dim = output_dim
 
-    def forward(self, params):
+    def input(self, params, **kwargs):
         raise NotImplementedError("This method must be overwritten!")
 
-    def backward(self, params):
-        raise NotImplementedError("This method must be overwritten!")
-
-    def input(self, params):
+    def parameters(self):
         raise NotImplementedError("This method must be overwritten!")
