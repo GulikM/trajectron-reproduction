@@ -1,7 +1,7 @@
-import enum
+from enum import Enum
 
 
-class Aggregation(enum):
+class AggregationType(Enum):
     ElementWiseSum = 0
     Average = 1
     Random = 2

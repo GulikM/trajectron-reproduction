@@ -1,4 +1,4 @@
-import config
+from src.util import config_reader
 
 
 def run():
@@ -6,5 +6,8 @@ def run():
 
 
 if __name__ == "__main__":
-    conf = config.get()
+    conf = config_reader.get_config()
+    hyperparams = config_reader.get_hyperparams()
+    print(config_reader)
+    print(hyperparams)
     run()

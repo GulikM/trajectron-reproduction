@@ -1,5 +1,5 @@
 import torch as tc
-from src.components.NetworkComponent import NetworkComponent
+from src.components.network_component import NetworkComponent
 
 
 class LSTM(NetworkComponent):

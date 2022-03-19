@@ -1,4 +1,4 @@
-from src.components.NetworkComponent import NetworkComponent
+from src.components.network_component import NetworkComponent
 
 
 class ATTN(NetworkComponent):
@@ -11,7 +11,7 @@ class ATTN(NetworkComponent):
         # TODO: construct model here
         pass
 
-    def input(self, params):
+    def input(self, params, **kwargs):
         """
         Method for parsing input.
         :param params: input tensor
