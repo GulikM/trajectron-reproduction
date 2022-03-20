@@ -1,9 +1,10 @@
 import pandas as pd
 from pathlib import Path
 import numpy as np
+import torch
 from typing import List, Union, Optional
 
-path = Path(r'.\trajectron-reproduction\data\pedestrians\eth\train\biwi_hotel_train.csv') # data source
+# path = Path(r'.\trajectron-reproduction\data\pedestrians\eth\train\biwi_hotel_train.csv') # data source
 path = Path('pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
 
 
@@ -93,7 +94,8 @@ class Scene(object):
         self.output_states= len(self.output_cols)
         self.use_robot_node = False
         self.use_edge_nodes = True
-        
+        self.aggregation_operation = 'sum'
+
         #### Load data in dataframe
         colnames = ['t', 'id', 'x', 'y']
         with open(path) as infile:
@@ -103,7 +105,7 @@ class Scene(object):
         df['t'] = df['t']/10
         
         ids = df['id'].unique()
-    
+        self.ids = ids
         for id in ids:
             # select rows for a specific id
             rows = df.loc[df['id'] == id]
@@ -111,7 +113,7 @@ class Scene(object):
             dt = 1
             df.loc[rows.index, 'vx'] = rows['x'].diff() / dt
             df.loc[rows.index, 'vy'] = rows['y'].diff() / dt
-        # replace NaN elements with zero
+        # replace NaN elements with zero: 
         df = df.fillna(0)
         
         self.data = df
@@ -261,15 +263,15 @@ class Scene(object):
 
         Returns
         -------
-        batch : [x_i:           seq_H x 1 x input_states
+        batch : [x_i:           seq_H x input_states
 
-                 x_neighbours:  seq_H x N x input_states
+                 x_neighbours:  seq_H x input_states (aggregated)
 
-                 x_R:           seq_H x 1 x states
+                 x_R:           seq_H x states
 
-                 x_i_fut:       seq_F x 1 x input_states
+                 x_i_fut:       seq_F x input_states
                  
-                 y_i:           seq_F x 1 x output_states]
+                 y_i:           seq_F x output_states]
 
         """
         x_R = []
@@ -283,54 +285,82 @@ class Scene(object):
             neighbours = self.get_neighbours(id = id, t = t)
             x_neighbours = []
             for neighbour in neighbours:
-                #TODO normalize neighbour data
-                x_neighbours.append(self.time_window(t-(self.H+1), t, self.input_cols, id=neighbour))
-                
-                #TODO elemtwise sum as agregation operation
-            x_neighbours = np.array(x_neighbours) #TODO: convert to right shape, currently: N x seq_H x states
-            
-            
-            
+                #TODO normalize neighbour data (relative state + standardize)
+                x_neighbour = self.time_window(t-(self.H+1), t, self.input_cols, id=neighbour)
+                if len(x_neighbour)==self.H+1: #TODO: right now we only take into account neighbours with enoug data, but this does not have to be the case
+                    x_neighbours.append(x_neighbour)
+
+            x_neighbours = np.array(x_neighbours).reshape((-1, self.H+1, self.input_states)) 
+
+            if self.aggregation_operation == 'sum':
+                x_neighbours = np.sum(x_neighbours, axis=0)
+            else:
+                raise NotImplementedError
+ 
         x_i = self.time_window(t-(self.H+1), t, self.input_cols, id=id)
         x_i_fut = self.time_window(t, t+self.F, self.input_cols, id=id)
         y_i = self.time_window(t, t+self.F, self.output_cols, id=id)
-        
-        # TODO: convert arrays to pytorch tensors and reshape
-        
-        
+         
         return x_i, x_i_fut, y_i, x_R, x_neighbours
         
     def get_batches(self):
+        """
+        Iterate over all nodes and times and return batch data of scene
+
+        Returns
+        -------
+        X_i : history of node i:                     seq_H+1 x N x input states.
+        X_i_fut : future of node i:                  seq_F   x N x input states
+        Y_i : label for node i:                      seq_F   x N x output states
+        X_neighbours : Aggregated neighbour data:    seq_H+1 x N x input states
+
+        """
         
-        batches = 0
-        return batches
+        X_i         = torch.zeros((self.H+1, 1, self.input_states))
+        X_i_fut     = torch.zeros((self.F, 1, self.input_states))
+        Y_i         = torch.zeros((self.F, 1, self.output_states))
+        X_neighbours= torch.zeros((self.H+1, 1, self.input_states))
+        
+        for id in self.ids:
+            t_range = self.filter_data(id = id)['t'].values
+            for t in t_range:
+                x_i, x_i_fut, y_i, x_R, x_neighbours = self.get_batch(id, t) #TODO: make variable for if we use robot or not
+                if (len(x_i)==len(x_neighbours)== self.H+1 and len(x_i_fut)==len(y_i)==self.F): # only store data if sequence long enough
+                
+                    ### convert to pytorch tensor and reshape:
+                    x_i          = torch.tensor(x_i).reshape((self.H+1, 1, self.input_states))
+                    x_neighbours = torch.tensor(x_neighbours).reshape((self.H+1, 1, self.input_states))
+                    y_i          = torch.tensor(y_i).reshape((self.F, 1, self.output_states))
+                    x_i_fut      = torch.tensor(x_i_fut).reshape((self.F, 1, self.input_states))     
+                    
+                    X_i         = torch.cat((X_i, x_i), dim=1)
+                    X_i_fut     = torch.cat((X_i_fut, x_i_fut), dim=1)
+                    Y_i         = torch.cat((Y_i, y_i), dim=1)
+                    X_neighbours= torch.cat((X_neighbours, x_neighbours), dim=1)
+                    
+        return X_i, X_i_fut, Y_i, X_neighbours
 
-    @property
-    def X(self):
-        import numpy as np
-        self.nodes = [self.get_node_by_id(100)]
-        tmp = [node.X(self.H, self.X_cols) for node in self.nodes]
-        tmp = np.array(tmp)
-        print(tmp.shape)
-        return [node.X(self.H, self.X_cols) for node in self.nodes]
+    # @property
+    # def X(self):
+    #     import numpy as np
+    #     self.nodes = [self.get_node_by_id(100)]
+    #     tmp = [node.X(self.H, self.X_cols) for node in self.nodes]
+    #     tmp = np.array(tmp)
+    #     print(tmp.shape)
+    #     return [node.X(self.H, self.X_cols) for node in self.nodes]
 
-    @property
-    def y(self): 
-        return [node.y(self.F, self.y_cols) for node in self.nodes]
+    # @property
+    # def y(self): 
+    #     return [node.y(self.F, self.y_cols) for node in self.nodes]
     
     
 
 
-
-
-
-
-
-
-
+pedestrian = NodeType('pedestrian')
 scene = Scene(path, header=0)
-neigbours = scene.get_neighbours(id = 1, t = 0, include_node_i = False)
-batch = scene.get_batch(3, 6)
-print(batch)
+scene.add_nodes_from_data()
+
+X_i, X_i_fut, Y_i, X_neighbours = scene.get_batches()
+
 
 
