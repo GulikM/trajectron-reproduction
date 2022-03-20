@@ -1,65 +1,14 @@
 import pandas as pd
 from pathlib import Path
-
-# from itertools import product
-
-# DELTA_TIMESTAMP = 0.1 # 10 milllis in between frames 
+import numpy as np
+from typing import List, Union, Optional
 
 path = Path(r'.\trajectron-reproduction\data\pedestrians\eth\train\biwi_hotel_train.csv') # data source
-
-# colnames = ['t', 'id', 'x', 'y'] # headers
-
-# df = pd.read_csv(path, delimiter='\t', names=colnames)
-
-# ids = df['id'].unique()
-# for id in ids:
-#     # select rows for a specific id
-#     rows = df.loc[df['id'] == id]
-#     # add delta position between consecutive frames
-#     df.loc[rows.index, 'dx'] = rows['x'].diff()
-#     df.loc[rows.index, 'dy'] = rows['y'].diff()
-#     # add delta time between consecutive frames
-#     df.loc[rows.index, 'dt'] = rows['t'].diff() * 0.1
-#     # convert delta position to velocity
-#     df['dx'] /= df['dt']
-#     df['dy'] /= df['dt']
-
-# with open(path) as f:
-#     df = pd.read_csv(f, delimiter='\t', names=colnames)
-    
-#     timestamps = df['t'].unique() 
-#     ids = df['id'].unique()
-
-#     idxs = list(product(timestamps, ids))
-    
-#     df = df.set_index(['t', 'id']).reindex(idxs).reset_index()
-
-#     for id in ids:
-#         # select rows for a specific id
-#         rows = df.loc[df['id'] == id]
-#         # add delta position between consecutive frames
-#         df.loc[rows.index, 'dx'] = rows['x'].diff()
-#         df.loc[rows.index, 'dy'] = rows['y'].diff()
-#         # add delta time between consecutive frames
-#         df.loc[rows.index, 'dt'] = rows['t'].diff() * DELTA_TIMESTAMP
-#         # convert delta position to velocity
-#         df['dx'] /= df['dt']
-#         df['dy'] /= df['dt']
-
-#     # replace NaN elements with zero
-#     df = df.fillna(0)
-#     # note: velocities for the agents that just arrived in the scene are set to zero,
-#     # even though there is no way for us to know what the position of the agent was
-#     # before it arrived on the scene.
-
-#     # save
-# df.to_csv(path.parent / (path.stem + '.csv'), index=False)
+path = Path('pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
 
 
 
 
-
-from typing import List, Union, Optional
 
 
 class NodeType(object):
@@ -125,21 +74,79 @@ class Scene(object):
             path = Path(path)
 
         self.name = path.stem
-        self.data = pd.read_csv(path, sep=sep, header=header) # TODO: enable other file formats and add reading in chunks
+        #self.data = pd.read_csv(path, sep=sep, header=header) # TODO: enable other file formats and add reading in chunks
         self.nodes = []
 
         self.X_cols = None
         self.y_cols = None
-        self.H = None
-        self.F = None
+
+        
+        #### Load  hyperparameters:
+        
+        self.attention_radius = 5 # m (for pedestrians)
+        self.H = 3
+        self.F = 3
+        self.data_cols   = ['t', 'id', 'x', 'y', 'vx', 'vy']
+        self.input_cols  = ['x', 'y', 'vx', 'vy']
+        self.output_cols = ['x', 'y']
+        self.input_states = len(self.input_cols)
+        self.output_states= len(self.output_cols)
+        self.use_robot_node = False
+        self.use_edge_nodes = True
+        
+        #### Load data in dataframe
+        colnames = ['t', 'id', 'x', 'y']
+        with open(path) as infile:
+            df = pd.read_csv(infile, sep='\t', names=colnames)
+            
+        # convert time to seconds
+        df['t'] = df['t']/10
+        
+        ids = df['id'].unique()
+    
+        for id in ids:
+            # select rows for a specific id
+            rows = df.loc[df['id'] == id]
+            # add delta position between consecutive frames
+            dt = 1
+            df.loc[rows.index, 'vx'] = rows['x'].diff() / dt
+            df.loc[rows.index, 'vy'] = rows['y'].diff() / dt
+        # replace NaN elements with zero
+        df = df.fillna(0)
+        
+        self.data = df
+        
 
     
-    # def read_csv(self, path: Union[str, Path], sep: str = ',', header: Optional[Union[int, List[int]]] = None, chunksize: Optional[int] = None) -> pd.DataFrame:
-    #     chunks = []
-    #     for chunk in pd.read_csv(path, sep=sep, header=header, chunksize=chunksize):
-    #         chunks.append(chunk)
-    #     return pd.concat(chunks)
+    def filter_data(self, id = None, t = None):
+        """
+        Fitlers data for given time t and node id
+        
+        Parameters
+        ----------
+        id : node id to filter, optional
+             The default is None.
+        t : time t to filter, optional
+            The default is None.
 
+        Returns
+        -------
+        filtered data
+
+        """
+        
+        mask_id = True
+        mask_t  = True
+        
+        if not(id==None):
+            mask_id = self.data['id'] == id
+            
+        if not(t==None):
+            mask_t  = self.data['t']  == t
+ 
+        mask = mask_t * mask_id
+        
+        return self.data[mask]
 
     def get_node_by_id(self, id: int) -> Node:
         for node in self.nodes:
@@ -177,6 +184,126 @@ class Scene(object):
 
     def set_F(self, F: int) -> None:
         self.F = F
+        
+    # def time_window(self, upper_bound: int, lower_bound: int, cols: Optional[List[str]], nodes: Optional[List[Node]] = None):
+    #    	if nodes is None:
+    #    		nodes = self._nodes
+    #    	return [node.time_window(upper_bound, lower_bound, cols) for node in nodes]
+       
+    def time_window(self, lower: int, upper: int, cols: List[str], id = None):
+        '''
+        Returns a list of 
+
+        :param upper: Upper bound index (inclusive) 
+        :param lower: Lower bound index (exclusive)
+        :param cols: 
+        '''
+        
+        if not(id==None):
+            mask_id = self.data['id'] == id
+        else:
+            mask_id = True
+            
+        mask1 = self.data['t'] >  lower
+        mask2 = self.data['t'] <= upper
+        mask = mask1 * mask2 * mask_id
+        
+        
+        subset = self.data[cols]
+
+        return subset.loc[mask].to_numpy()
+        
+    def get_neighbours(self, id: int, t: int, include_node_i = False):
+        """
+        Returns an array with the neighbour nodes of node_i wihtin the perception range at time t
+
+        Parameters
+        ----------
+        id : int
+            node id.
+        t : int
+            time t.
+
+        Returns
+        -------
+        neighbours : array with neighbour nodes
+
+        """
+        
+        df_node_i = self.filter_data(id = id, t = t)
+        df_nodes  = self.filter_data(t = t)
+        
+        if (len(df_node_i)==0 or len(df_nodes)==0):
+            print('No data available for given t (and node id)')
+            neighbours = np.array([])
+        else:      
+            pos_node_i = np.array([df_node_i['x'].values * np.ones(len(df_nodes)), 
+                                   df_node_i['y'].values * np.ones(len(df_nodes))])
+            pos_nodes  = np.array([df_nodes['x'], df_nodes['y']])
+            distances  = np.linalg.norm(pos_nodes - pos_node_i, axis = 0)
+            perception_logic = (distances <= self.attention_radius)
+            not_node_i = (distances != 0) 
+            if include_node_i:
+                not_node_i = True
+            neighbours = df_nodes['id'][not_node_i * perception_logic].values 
+        
+        return neighbours
+    
+        
+    def get_batch(self, id, t):
+        """
+        Return batch for node i and time t
+        
+        Parameters
+        ------
+        id
+        t
+
+        Returns
+        -------
+        batch : [x_i:           seq_H x 1 x input_states
+
+                 x_neighbours:  seq_H x N x input_states
+
+                 x_R:           seq_H x 1 x states
+
+                 x_i_fut:       seq_F x 1 x input_states
+                 
+                 y_i:           seq_F x 1 x output_states]
+
+        """
+        x_R = []
+        x_neighbours = []
+        
+        if self.use_robot_node:
+            raise NotImplementedError
+            x_R = []
+        
+        if self.use_edge_nodes:
+            neighbours = self.get_neighbours(id = id, t = t)
+            x_neighbours = []
+            for neighbour in neighbours:
+                #TODO normalize neighbour data
+                x_neighbours.append(self.time_window(t-(self.H+1), t, self.input_cols, id=neighbour))
+                
+                #TODO elemtwise sum as agregation operation
+            x_neighbours = np.array(x_neighbours) #TODO: convert to right shape, currently: N x seq_H x states
+            
+            
+            
+        x_i = self.time_window(t-(self.H+1), t, self.input_cols, id=id)
+        x_i_fut = self.time_window(t, t+self.F, self.input_cols, id=id)
+        y_i = self.time_window(t, t+self.F, self.output_cols, id=id)
+        
+        # TODO: convert arrays to pytorch tensors and reshape
+        
+        
+        return x_i, x_i_fut, y_i, x_R, x_neighbours
+        
+    def get_batches(self):
+        
+        batches = 0
+        return batches
 
     @property
     def X(self):
@@ -190,6 +317,8 @@ class Scene(object):
     @property
     def y(self): 
         return [node.y(self.F, self.y_cols) for node in self.nodes]
+    
+    
 
 
 
@@ -198,78 +327,10 @@ class Scene(object):
 
 
 
-pedestrian = NodeType('pedestrian')
+
 scene = Scene(path, header=0)
-
-scene.add_nodes_from_data()
-scene.set_X_cols(['x', 'y', 'dx', 'dy'])
-scene.set_y_cols(['dx', 'dy'])
-scene.set_H(20)
-scene.set_F(10)
-
-node = scene.get_node_by_id(100)
-# node.X(100, ['t', 'id'])
-
-scene.X
+neigbours = scene.get_neighbours(id = 1, t = 0, include_node_i = False)
+batch = scene.get_batch(3, 6)
+print(batch)
 
 
-# class IDK(object):
-#     '''
-    
-#     '''
-#     def __init__(self, path: str, X_cols: List[str], y_cols: List[str]) -> None:        
-#         df = pd.read_csv(path, header=0)
-#         self.X = df[X_cols]
-#         self.y = df[y_cols]
-
-#     @property
-#     def X(self):
-#         return self.X
-
-#     @property
-#     def y(self):
-#         return self.y    
-    
-#     def get_node_timestep_data(self, id: int, t: int, H: int, F: int):
-#         '''
-        
-#         '''
-#         X = self.X
-#         y = self.y
-    
-#         X_node = X.loc[X['id'] == id]
-#         X_batch = X_node.loc[X_node['t'] > t-H]
-#         X_batch = X_batch.loc[X_batch['t'] <= t]
-        
-#         y_node = y.loc[y['id'] == id]
-#         y_batch = y_node.loc[y_node['t'] > t]
-#         y_batch = y_batch.loc[y_batch['t'] <= t+F]
-
-#         return X_batch, y_batch
-
-#     def get_node_data(self, node: int, H, F):
-#         timestamps = self.X['t'].unique()
-#         return [self.node_batch(node, t, H, F) for t in timestamps]
-
-#     def get_data(self, t: int, H, F):
-#         nodes = self.X['id'].unique()
-#         return [self.batch(node, t, H, F) for node in nodes]
-
-#     # def scatterplot(self, ids: List[int]) -> None:
-#     #     for id in ids:
-#     #         self.plot_node(id)
-
-#     # def scatterplot_node(self, id: int, scaling: int == 1) -> None:
-#     #     '''
-#     #     Args: 
-#     #             id: node id
-#     #             scaling:
-#     #     '''
-#     #     X_node = self.X.loc[self.X['id'] == id]
-#     #     plt.scatter(X_node['x'], X_node['y'], s=(scaling*self.X['t']))
-
-
-
-
-
-# data_eth = IDK(path, X_cols=['t', 'id', 'x', 'y', 'dx', 'dy'], y_cols=['t', 'id', 'dx', 'dy'])
