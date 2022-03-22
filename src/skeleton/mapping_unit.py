@@ -14,7 +14,6 @@ class MappingUnit(tc.nn.Module):
         for alias, network in components:
             self.__dict__[alias] = network
 
-
     def _register_activation_functions(self, **kwargs):
         """
         Loads all activation functions from the class

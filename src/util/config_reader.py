@@ -1,62 +1,52 @@
 import yaml
 import os
+import re
 
-PATH_DEFAULT_CONFIG = "../config/default.yml"
+from src.util import DotDict
+
+PATH_DEFAULT_CONFIG = "../config/_config.yml"
 PATH_CONFIG = "../config/config.yml"
 PATH_HYPERPARAMS = "../config/hyperparams.yml"
 _DEFAULT_CONFIG = None
 _HYPERPARAMS = None
 
-_SOURCE_FOLDER = (lambda a: a[:a.rindex("src") + 4])(os.getcwd())
-_CONFIG_FILES = [
-    os.path.join(item[0], file_name)
-    for item in os.walk(_SOURCE_FOLDER)
-    for file_name in item[2]
-    if os.path.basename(item[0]) == "config" and file_name.endswith(".yml")
-]
-_CONFIG_FILE_NAMES = [os.path.basename(file_path).rsplit('.', 1)[0] for file_path in _CONFIG_FILES]
+
+def read_config(*args, **kwargs) -> DotDict:
+    try:
+        source_folder = (lambda a: a[:a.rindex("src") + 4])(os.getcwd())
+    except ValueError:
+        if "src" in os.listdir(os.getcwd()):
+            source_folder = os.getcwd() + "/src"
+        else:
+            raise FileNotFoundError(f"Could not locate src folder from directory {os.getcwd()}")
+    config_files = {
+        file_name.rsplit(".", 1)[0]: os.path.join(item[0], file_name)
+        for item in os.walk(source_folder)
+        for file_name in item[2]
+        if os.path.basename(item[0]) == "config" and file_name.endswith(".yml")
+    }
+    final_dict = DotDict()
+    default_elements = dict()
+    for name, file_name in config_files.items():
+        if name.endswith("_default"):
+            default_elements[name] = name[:name.find("_default")]
+            continue
+        with open(file_name, *args, **kwargs) as yaml_file:
+            final_dict[name] = DotDict(yaml.load(yaml_file, Loader=yaml.FullLoader))
+
+    for default_name, target_name in default_elements:
+        with open(config_files[default_name], *args, **kwargs) as yaml_file:
+            dict2 = DotDict(yaml.load(yaml_file, Loader=yaml.FullLoader))
+            final_dict[target_name] = {**dict2, **final_dict[target_name]}
+    return final_dict
 
 
-class ConfigReader:
-    def __init__(self, base: str = PATH_DEFAULT_CONFIG, *additional: str):
-        self.files = [base] + list(additional)
-        self.config = None
-        pass
-
-    def read_config(self) -> None:
-        """
-        Reading YAML files and loading their config, keeping default values where no "new" ones are provided.
-        :param default: the default configuration
-        :param config: the specified configuration
-        :return: dictionary (dict) of configuration
-        """
+class ConfigDict(DotDict):
+    def __init__(self, *file_paths: str, **kwargs):
         result = {}
-        for file in self.files:
-            with open(file) as f:
+        for file_path in file_paths:
+            with open(file_path) as f:
                 config_element = yaml.load(f, Loader=yaml.FullLoader)
                 result = {**result, **dict(config_element)}
-        self.config = result
+        super().__init__(**{**result, **kwargs})
         pass
-
-    def get(self) -> dict:
-        """
-        Method to obtain a (copy of) configuration.
-        :return: Configuration dictionary.
-        """
-        if not self.config:
-            self.read_config()
-        return self.config.copy()
-
-
-def get_config() -> dict:
-    global _DEFAULT_CONFIG
-    if not _DEFAULT_CONFIG:
-        _DEFAULT_CONFIG = ConfigReader()
-    return _DEFAULT_CONFIG.get()
-
-
-def get_hyperparams() -> dict:
-    global _HYPERPARAMS
-    if not _HYPERPARAMS:
-        _HYPERPARAMS = ConfigReader(base=PATH_HYPERPARAMS)
-    return _HYPERPARAMS.get()
