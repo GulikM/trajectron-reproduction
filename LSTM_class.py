@@ -34,7 +34,7 @@ class LSTM(nn.Module):
         self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size,
                             num_layers=num_layers, batch_first=False)
         
-        self.fc = nn.Linear(hidden_size, num_classes)
+        self.fc = nn.Linear(hidden_size, num_classes) # deze moet eruit later om de hidden state naar de encoder te brengen
 
     def forward(self, x):
         h_0 = Variable(torch.zeros(self.num_layers, x.size(dim=1), self.hidden_size))
@@ -59,7 +59,7 @@ class LSTM(nn.Module):
             c_0 = torch.reshape(c_0, (self.num_layers, x.size(1), self.hidden_size))
 
             # Predict time step and append predicted time step to the sequence
-            output = self.fc(h_out)
+            output = self.fc(h_out) # dit gaat er dus uit, output moet een tuple van hidden states worden van lengte F
             out.append(output)
             
             # Make the new sequence to predict the next time step
