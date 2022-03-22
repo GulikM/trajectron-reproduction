@@ -43,11 +43,11 @@ class LSTM(nn.Module):
         out = []
 
 
-        
+        data = x
         # Propagate input through LSTM
         for i in range(F):
             
-            ula, (h_out, c_out) = self.lstm(x, (h_0, c_0))  
+            ula, (h_out, c_out) = self.lstm(data, (h_0, c_0))  
             h_out = h_out.view(-1, self.hidden_size)
             
             # Adjust the states (short term and long term) to predict the next time step
@@ -55,15 +55,15 @@ class LSTM(nn.Module):
             c_0 = c_out
 
             # make sure c0 and h0 keep the right shape:
-            h_0 = torch.reshape(h_0, (self.num_layers, x.size(1), self.hidden_size))
-            c_0 = torch.reshape(c_0, (self.num_layers, x.size(1), self.hidden_size))
+            h_0 = torch.reshape(h_0, (self.num_layers, data.size(1), self.hidden_size))
+            c_0 = torch.reshape(c_0, (self.num_layers, data.size(1), self.hidden_size))
 
             # Predict time step and append predicted time step to the sequence
             output = self.fc(h_out) # dit gaat er dus uit, output moet een tuple van hidden states worden van lengte F
             out.append(output)
             
             # Make the new sequence to predict the next time step
-            l =  [x[2, :, :], x[1, :, :], output]
+            l =  [data[2, :, :], data[1, :, :], output]
             data = torch.stack(l)
 
             
