@@ -5,9 +5,9 @@
 # import torch
 # import torch.nn as nn
 # from itertools import product
-# import os
+import os
 
-# os.environ['KMP_DUPLICATE_LIB_OK']='True'
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 
 # def import_ped_data(path, safe=False):
@@ -208,7 +208,7 @@ class Scene(object):
         #### Load  hyperparameters:
         
         self.attention_radius = 5 # m (for pedestrians)
-        self.H = 3
+        self.H = 2
         self.F = 3
         self.data_cols   = ['t', 'id', 'x', 'y', 'vx', 'vy']
         self.input_cols  = ['x', 'y', 'vx', 'vy']
@@ -240,6 +240,7 @@ class Scene(object):
         df = df.fillna(0)
         
         self.data = df
+        self.batch = None
         
 
     
@@ -424,6 +425,8 @@ class Scene(object):
         x_i_fut = self.time_window(t, t+self.F, self.input_cols, id=id)
         y_i = self.time_window(t, t+self.F, self.output_cols, id=id)
          
+        self.batch = x_i, x_i_fut, y_i, x_R, x_neighbours
+        
         return x_i, x_i_fut, y_i, x_R, x_neighbours
         
     def get_batches(self):

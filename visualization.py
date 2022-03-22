@@ -20,7 +20,23 @@ import random
 # inpath = pathlib.Path('C:/Users/maart/Documents/GitHub/Trajectron-reproduction/data/pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
 # df = import_ped_data(inpath)
 
-def evaluate_model(model, df, node, t_min=1, t_max = None):
+def evaluate(scene, model):
+    
+    # set model to evaluation mode
+    model.eval()
+    
+    X, _, Y_true, _, _ = scene.batch
+    Y_pred = model(X)
+    
+    DE = abs(Y_true - Y_pred)# displacement error (l2 distance) #TODO: fix l2 distance
+    ADE = # average displacement error
+    FDE = # final displacement error
+    
+    return ADE, FDE
+
+
+
+def evaluate_model(model, scene, node, t_min=1, t_max = None):
     """
     Evaluates dataset in df format and returns the evaluated df.
 
@@ -40,7 +56,11 @@ def evaluate_model(model, df, node, t_min=1, t_max = None):
     # set model to evaluation mode
     model.eval()
     
-    X, Y_true = get_node_batches(df, node, model.H, model.F)
+    
+    x_i, x_i_fut, y_i, x_R, x_neighbours = scene.batch
+    # X, Y_true = get_node_batches(df, node, model.H, model.F)
+    X = x_i
+    Y_true = y_i
     
     X = torch.reshape(torch.tensor(X),(model.H, -1, model.num_states))
     X = X.type(torch.FloatTensor)
@@ -72,58 +92,58 @@ def evaluate_model(model, df, node, t_min=1, t_max = None):
     plt.legend()
 
 
-def plot_traj(df_true,df_pred, t_min=1, t_max = None):
-    """
-    Plot true and predicted trajectories
-    ----------
-    df_true : data frame with true trajectory
-    df_pred : data frame with predicted trajectory
-    t_min : start time. The default is 1.
-    t_max : end time.   The default is None.
+# def plot_traj(df_true,df_pred, t_min=1, t_max = None):
+#     """
+#     Plot true and predicted trajectories
+#     ----------
+#     df_true : data frame with true trajectory
+#     df_pred : data frame with predicted trajectory
+#     t_min : start time. The default is 1.
+#     t_max : end time.   The default is None.
 
-    Returns
-    -------
-    None.
+#     Returns
+#     -------
+#     None.
 
-    """
-    if not(t_max == None):
-        df_true = df_true.loc[df_true['t'] >= t_min]
-        df_true = df_true.loc[df_true['t'] <= t_max] 
-        df_pred = df_pred.loc[df_pred['t'] >= t_min]
-        df_pred = df_pred.loc[df_pred['t'] <= t_max]
+#     """
+#     if not(t_max == None):
+#         df_true = df_true.loc[df_true['t'] >= t_min]
+#         df_true = df_true.loc[df_true['t'] <= t_max] 
+#         df_pred = df_pred.loc[df_pred['t'] >= t_min]
+#         df_pred = df_pred.loc[df_pred['t'] <= t_max]
         
-    # assert (len(df_true)==len(df_pred))
-    nodes_true = np.unique(df_true['id'].values)
-    nodes_pred = np.unique(df_pred['id'].values)
+#     # assert (len(df_true)==len(df_pred))
+#     nodes_true = np.unique(df_true['id'].values)
+#     nodes_pred = np.unique(df_pred['id'].values)
 
-    fig = plt.figure()
-    plt.ylabel('y (m)')
-    plt.xlabel('x (m)')
+#     fig = plt.figure()
+#     plt.ylabel('y (m)')
+#     plt.xlabel('x (m)')
 
-    for node in nodes_true:
-        # plot traj_true
-        df_i = df_true.loc[df_true['id'] == node]
-        x = df_i['x'].values
-        y = df_i['y'].values
-        plot_true = plt.plot(x,y, 'b', label = 'true')
+#     for node in nodes_true:
+#         # plot traj_true
+#         df_i = df_true.loc[df_true['id'] == node]
+#         x = df_i['x'].values
+#         y = df_i['y'].values
+#         plot_true = plt.plot(x,y, 'b', label = 'true')
 
-        # plot node number (beginning of traj, only for true, but starting point is the same)
-        plt.text(x[0], y[0], int(node))
+#         # plot node number (beginning of traj, only for true, but starting point is the same)
+#         plt.text(x[0], y[0], int(node))
         
-    for node in nodes_pred:
-        # plot traj_pred
-        df_i = df_pred.loc[df_pred['id'] == node]
-        noise = np.random.standard_normal(len(df_i))/20 # TODO fix real data
-        x = df_i['x'].values + noise
-        y = df_i['y'].values + noise
-        plot_pred = plt.plot(x,y, 'r--', label = 'pred')
+#     for node in nodes_pred:
+#         # plot traj_pred
+#         df_i = df_pred.loc[df_pred['id'] == node]
+#         noise = np.random.standard_normal(len(df_i))/20 # TODO fix real data
+#         x = df_i['x'].values + noise
+#         y = df_i['y'].values + noise
+#         plot_pred = plt.plot(x,y, 'r--', label = 'pred')
         
-def plot_node(df, i):
-    plt.figure()
-    plt.ylabel('y (m)')
-    plt.xlabel('x (m)')
-    df_i = df.loc[df['id'] == int(i)]
-    plt.plot(df_i['x'],df_i['y'])
+# def plot_node(df, i):
+#     plt.figure()
+#     plt.ylabel('y (m)')
+#     plt.xlabel('x (m)')
+#     df_i = df.loc[df['id'] == int(i)]
+#     plt.plot(df_i['x'],df_i['y'])
     
 
 # plot_node(df, 11)

@@ -74,8 +74,8 @@ path_val = Path('data/pedestrians/eth/val/biwi_hotel_val.txt', safe=False)
 pedestrian = NodeType('pedestrian')
 scene = Scene(path, header=0)
 scene_val = Scene(path_val, header=0)
-scene.add_nodes_from_data()
-scene_val.add_nodes_from_data()
+# scene.add_nodes_from_data()
+# scene_val.add_nodes_from_data()
 
 X_i, X_i_fut, Y_i, X_neighbours = scene.get_batches()
 X_i_val, _, Y_i_val, _ = scene_val.get_batches()
@@ -83,7 +83,7 @@ X_i_val, _, Y_i_val, _ = scene_val.get_batches()
 input_size = 4
 hidden_size = 32
 num_layers = 1
-H = 3
+H = 2
 F = 3
 num_states = 2
 
@@ -110,12 +110,13 @@ losses_val   = []
 
 X_train = X_train.type(torch.FloatTensor)
 Y_train = Y_train.type(torch.FloatTensor)
+X_val = X_val.type(torch.FloatTensor)
+Y_val = Y_val.type(torch.FloatTensor)
 
 for epoch in range(num_epochs):
     outputs = lstm(X_train)
     optimizer.zero_grad()
     # obtain the loss function
-    print(outputs.shape, Y_train.shape)
     loss = criterion(outputs, Y_train)
     loss.backward()   
     optimizer.step()
@@ -171,5 +172,5 @@ plt.xlabel('epochs')
 plt.ylabel('loss')
 plt.legend()
 
-evaluate_model(lstm, scene.data, 25)
+evaluate_model(lstm, scene, 25)
 
