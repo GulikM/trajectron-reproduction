@@ -4,11 +4,12 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-from preprocessing import get_batches
-from preprocessing import import_ped_data
+# from preprocessing import get_batches
+# from preprocessing import import_ped_data
 from visualization import evaluate_model
 import pandas as pd
 import pathlib
+from preprocessing import Scene, NodeType
 
 """
 For the future prediction based on the history of an agent the following parameters for the LSTM are used in the paper:
@@ -58,20 +59,40 @@ class LSTM(nn.Module):
         return out
 
 
-inpath = pathlib.Path('data/pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
-df_train = import_ped_data(inpath)
-inpath = pathlib.Path('data/pedestrians/eth/val/biwi_hotel_val.txt', safe=False)
-df_val = import_ped_data(inpath)
+# inpath = pathlib.Path('data/pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
+# df_train = import_ped_data(inpath)
+# inpath = pathlib.Path('data/pedestrians/eth/val/biwi_hotel_val.txt', safe=False)
+# df_val = import_ped_data(inpath)
+import pandas as pd
+from pathlib import Path
+import numpy as np
+import torch
+from typing import List, Union, Optional
 
-input_size = 2
+path = Path('data/pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
+path_val = Path('data/pedestrians/eth/val/biwi_hotel_val.txt', safe=False) 
+pedestrian = NodeType('pedestrian')
+scene = Scene(path, header=0)
+scene_val = Scene(path_val, header=0)
+scene.add_nodes_from_data()
+scene_val.add_nodes_from_data()
+
+X_i, X_i_fut, Y_i, X_neighbours = scene.get_batches()
+X_i_val, _, Y_i_val, _ = scene_val.get_batches()
+
+input_size = 4
 hidden_size = 32
 num_layers = 1
 H = 3
 F = 3
 num_states = 2
 
-X_train, Y_train = get_batches(df_train, H=H, F=F)
-X_val, Y_val = get_batches(df_val, H=H, F=F)
+X_train = X_i
+Y_train = Y_i
+X_val = X_i_val
+Y_val = Y_i_val
+# X_train, Y_train = get_batches(df_train, H=H, F=F)
+# X_val, Y_val = get_batches(df_val, H=H, F=F)
 
 
 
@@ -87,10 +108,14 @@ optimizer = torch.optim.Adam(lstm.parameters(), lr=learning_rate)
 losses_train = []
 losses_val   = []
 
+X_train = X_train.type(torch.FloatTensor)
+Y_train = Y_train.type(torch.FloatTensor)
+
 for epoch in range(num_epochs):
     outputs = lstm(X_train)
     optimizer.zero_grad()
     # obtain the loss function
+    print(outputs.shape, Y_train.shape)
     loss = criterion(outputs, Y_train)
     loss.backward()   
     optimizer.step()
@@ -146,5 +171,5 @@ plt.xlabel('epochs')
 plt.ylabel('loss')
 plt.legend()
 
-evaluate_model(lstm, df_train, 25)
+evaluate_model(lstm, scene.data, 25)
 
