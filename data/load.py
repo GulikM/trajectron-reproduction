@@ -99,11 +99,11 @@ class CSVDataset(Dataset):
 
     @property
     def header(self):
-        return self._data.columns.tolist()
+        return self._data.columns.tolist() # columns
 
     @property
     def index(self):
-        return self._data.index.name
+        return self._data.index.name # column(s) used as the row labels of the dataframe
 
     @index.setter
     def index(self, col: str) -> None:
