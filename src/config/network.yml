@@ -1,0 +1,19 @@
+const:
+  - &max_N 5
+  - &size_D 10
+  - &size_H 5
+
+components:
+  - lstm_32:
+    - input_dim: [*size_H, 1, *size_D]
+    - output_dim: []
+  - lstm_8:
+    - input_dim: None
+    - output_dim: None
+  - attn:
+    - input_dim: None
+    - output_dim: None
+
+mapping:
+  - [lstm_32, lstm_8]
+  - [lstm_32, CELU, attn]

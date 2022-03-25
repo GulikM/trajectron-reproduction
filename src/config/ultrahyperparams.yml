@@ -1,0 +1,8 @@
+number_of_cars: 5
+number_of_pedestrians: 7
+lstm:
+  nested_2:
+    my_value: 22
+  num_layers: 32
+  description: this is an example
+default_supplied: True

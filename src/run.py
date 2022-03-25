@@ -1,13 +1,10 @@
-from src.util import config_reader
+from pprint import pprint
+import src.config as config
 
 
 def run():
-    pass
+    pprint(config.get())
 
 
 if __name__ == "__main__":
-    conf = config_reader.get_config()
-    hyperparams = config_reader.get_hyperparams()
-    print(config_reader)
-    print(hyperparams)
     run()
