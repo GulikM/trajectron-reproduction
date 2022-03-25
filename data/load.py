@@ -4,10 +4,32 @@ import pandas as pd
 from pathlib import Path
 from typing import Union
 
-class Dataset(object):
+
+class Validated(object):
+    def __call_all(self, start: str):
+        def _predicate(member):
+            return inspect.isfunction(member) and (not start or member[0].startswith(start))
+        [func() for _, func in inspect.getmembers(self, predicate=_predicate)]
+
+    def validate(self):
+        self.__call_all('validate_')
+
+
+class Foo(Validated):
+    def validate_name(self):
+        print(f"HEY I'm {type(self)}")
+
+f = Foo()
+f.validate()
+
+
+
+class Dataset(object, Validated):
     def __init__(self, path: Union[str, Path]) -> None:
         self.path = path # call setter
         self._data = None
+        self._load_args = self._load_kwargs = None
+        self.params = None
     
     @property
     def path(self):
@@ -31,18 +53,18 @@ class Dataset(object):
     def data(self):
         return self._data
 
-    def load(self, *args, **kwargs) -> None:
+    def load(self, overwrite_params=False, **kwargs) -> None:
         # keep track of passed parameters to enable reloading of the dataset
-        self._load_parameters = {
-            'args': args,
-            'kwargs': kwargs
-        }
+        if not overwrite_params:
+            self.params = {**(self.load_args or dict()), **kwargs}
+        else:
+            self.params = kwargs
 
-    def reload(self):
-        params = getattr(self, '_load_parameters', None)
-        if params is None:
-            raise NotImplementedError
-        self.load(*params.args, **params.kwargs)
+    def unload(self, *keys: str):
+        # unload keys by name
+        for key in keys:
+            if self.params and key in self.params:
+                del self.params[key]
 
     def __call_all(self, startswith: str):
         members = inspect.getmembers(self, predicate=inspect.ismethod)
