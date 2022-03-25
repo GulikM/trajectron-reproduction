@@ -1,11 +1,14 @@
 import pandas as pd
 from pathlib import Path
 
+import numpy as np
+import torch
+
 # from itertools import product
 
 # DELTA_TIMESTAMP = 0.1 # 10 milllis in between frames 
 
-path = Path(r'.\trajectron-reproduction\data\pedestrians\eth\train\biwi_hotel_train.csv') # data source
+path = Path(r'.\trajectron-reproduction\data\pedestrians\eth\train\biwi_hotel_train.txt') # data source
 
 # colnames = ['t', 'id', 'x', 'y'] # headers
 
@@ -60,6 +63,9 @@ path = Path(r'.\trajectron-reproduction\data\pedestrians\eth\train\biwi_hotel_tr
 
 
 from typing import List, Union, Optional
+import inspect
+
+
 
 
 class NodeType(object):
@@ -72,204 +78,464 @@ class NodeType(object):
 
 
 class Node(object):
-    instances = set()
+    # instances = set()
 
-    def __init__(self, type: NodeType, id: int, data: Optional[pd.DataFrame], is_robot: bool = False) -> None:
+    def __init__(self, type: Optional[NodeType], id: int, data: Optional[pd.DataFrame], is_robot: bool = False) -> None:
         self.type = type
         self.id = id
-        self.data = data
+        self._data = data
         self.is_robot = is_robot
 
-        self.timesteps = data['t'].unique()
+        # Node.instances.append(self)
 
-        Node.instances.add(self)
+    # @classmethod
+    # def get(cls, key: str, value):
+    #     for inst in cls.instances:
+    #         if getattr(inst, key) == value:
+    #             return inst
 
-    @classmethod
-    def get(cls, key: str, value):
-        for inst in cls.instances:
-            if getattr(inst, key) == value:
-                return inst
-
-    def time_window(self, lower: int, upper: int, cols: List[str]): # TODO: add inclusive / exclusive slicing capabilities
-        '''
-        Returns a list of 
-
-        :param upper: Upper bound index (inclusive) 
-        :param lower: Lower bound index (exclusive)
-        :param cols: 
-        '''
-        subset = self.data[cols]
-        mask1 = subset['t'] >  lower
-        mask2 = subset['t'] <= upper
-        mask = mask1 * mask2
-        return subset.loc[mask].to_numpy()
+    # def get_neighbors(self, id: int):
+    #     return [node for node in self.__class__.instances if node.id != id]
     
-    def X(self, H: int, cols: List[str]):
-        return [self.time_window(t-H, t, cols) for t in self.timesteps]
+    @property
+    def timestamps(self):
+        return self._data['t'].unique()
+    
+    # def time_window(self, upper_bound: int, lower_bound: int, cols: Optional[List[str]]):
+    #     '''
+    #     Method for 
+        
+    #     :param upper_bound: (inclusive)        
+    #     :param lower_bound: (inclusive)
+    #     :param cols:       
+    #     :return:  
+    #     '''
+    #     if cols is None:
+    #         data = self._data
+    #     else:
+    #         data = self._data[cols]
+    #     mask1 = data['t'] >= lower_bound
+    #     mask2 = data['t'] <= upper_bound
+    #     mask = mask1 & mask2
+    #     return data.loc[mask].to_numpy()
 
-    def y(self, F: int, cols: List[str]):
-        return [self.time_window(t, t+F, cols) for t in self.timesteps]
+    # # TODO: constant size
+    # def X(self, H: int, cols: Optional[List[str]], timestamps: Optional[List[int]] = None):
+    #     if timestamps is None:
+    #         timestamps = self.timestamps
+    #     return [self.time_window(t-H, t, cols) for t in timestamps]
+
+    # def y(self, F: int, cols: Optional[List[str]], timestamps: Optional[List[int]] = None):
+    #     if timestamps is None:
+    #         timestamps = self.timestamps
+    #     return [self.time_window(t, t+F, cols) for t in self.timestamps]
+
+class Dataset(object):
+    def __init__(self, path: Union[str, Path]) -> None:
+        self.path = path # call setter
+        self._data = None
     
-    
-class Scene(object):
-    '''
-    
-    '''
-    def __init__(self, path: Union[str, Path], sep: str = ',', header: Optional[Union[int, List[int]]] = 0) -> None:
-        '''
-        :param path: 
-        :param sep: Delimiter to use
-        :param header: Row number(s) to use as the column names 
-        '''
+    @property
+    def path(self):
+        return self._path
+
+    @path.setter
+    def path(self, path: Union[str, Path]):
         if not isinstance(path, Path):
             path = Path(path)
-
-        self.name = path.stem
-        self.data = pd.read_csv(path, sep=sep, header=header) # TODO: enable other file formats and add reading in chunks
-        self.nodes = []
-
-        self.X_cols = None
-        self.y_cols = None
-        self.H = None
-        self.F = None
-
+        if not path.exists():
+            raise NotImplementedError  # TODO: raise appropriate exception
+        elif not path.is_file():
+            raise FileNotFoundError(f"No such file: '{path}'")
+        self._path = path
     
-    # def read_csv(self, path: Union[str, Path], sep: str = ',', header: Optional[Union[int, List[int]]] = None, chunksize: Optional[int] = None) -> pd.DataFrame:
-    #     chunks = []
-    #     for chunk in pd.read_csv(path, sep=sep, header=header, chunksize=chunksize):
-    #         chunks.append(chunk)
-    #     return pd.concat(chunks)
+    @property
+    def name(self):
+        return self._path.stem
 
+    @property
+    def data(self):
+        return self._data
+
+    def load(self, *args, **kwargs) -> None:
+        # keep track of passed parameters to enable reloading of the dataset
+        self._load_parameters = {
+            'args': args,
+            'kwargs': kwargs
+        }
+
+    def reload(self):
+        params = getattr(self, '_load_parameters', None)
+        if params is None:
+            raise NotImplementedError
+        self.load(*params.args, **params.kwargs)
+
+    def validate(self):
+        '''
+        '''
+        members = inspect.getmembers(self, predicate=inspect.ismethod)
+        for name, value in members:
+            if name.startswith('validate_') and callable(value):
+                value()
+
+# @classmethod
+# def call_all(cls, startswith: str):
+#     members = inspect.getmembers(cls, predicate=inspect.ismethod)
+#     for name, value in members:
+#         if name.startswith(startswith) and callable(value):
+#             value()
+
+class CSVDataset(Dataset):  
+    required_columns = None
+
+    def __init__(self, path: Union[str, Path]) -> None:
+        super().__init__(path)
+
+    def load(self, **kwargs) -> None:
+        super().load(**kwargs) # keep track of passed parameters to enable reloading of the dataset 
+        try:
+            inspect.signature(pd.read_csv).bind_partial(**kwargs)
+        except Exception as e:
+            raise e
+        chunksize = kwargs.pop('chunksize', None)
+        if chunksize is None:
+            self._data = pd.read_csv(self._path, **kwargs)
+        else:
+            chunks = []
+            for chunk in pd.read_csv(self._path, **kwargs, chunksize=chunksize):
+                chunks.append(chunk)
+            self._data = pd.concat(chunks)
+
+    @property
+    def header(self):
+        return self._data.columns.tolist()
+
+    @property
+    def index(self):
+        return self._data.index.name
+
+    @index.setter
+    def index(self, col: str) -> None:
+        if not col in (header := self.header):
+            raise ValueError(f'{col} not in {header}')
+        self._data.set_index([col])
+
+    def validate_header(self) -> bool:
+        if self.__class__.required_columns is not None:
+            if not self.__class__.required_columns in self.header:
+                raise NotImplementedError
+
+
+class Scene(object):
+    def __init__(self, dataset) -> None:
+        if not isinstance(dataset, CSVDataset):
+            raise TypeError(f'{dataset} must be {CSVDataset} instance')
+        self._dataset = dataset
+        self._nodes = []
+
+    # def __getitem__(self, key: str):
+    #     if key == "t":
+    #         return self.timestamps()
+    #     elif key == "id":
+    #         return self.ids()
+    #     else:
+    #         return self._dataset.__getitem__(key)
+
+    @property
+    def data(self):
+        return self._dataset.data
+
+    @property
+    def name(self):
+        return self._dataset.name
+
+    @property
+    def timestamps(self):
+        return self.data['t'].unique()
+
+    @property
+    def ids(self):
+        return self.data['id'].unique()
 
     def get_node_by_id(self, id: int) -> Node:
-        for node in self.nodes:
+        for node in self._nodes:
             if node.id == id:
                 return node
 
-    def add_node_from_data(self, type: NodeType, id: int, is_robot: bool = False) -> None:
-        mask = self.data['id'] == id
-        node_data = self.data.loc[mask]
-        self.nodes.append(Node(
-            type=type,
-            id=id, 
-            data=node_data,
-            is_robot=is_robot
-        ))
-
-    def add_nodes_from_data(self, ids: Optional[List[int]] = None) -> None:
-        # If ids not specified, add all nodes
+    def add_node_from_dataset(self, ids: Optional[List[int]] = None):
+        ''' 
+        '''
         if ids is None:
-            ids = self.data['id'].unique()
+            ids = self.ids
         for id in ids:
-            self.add_node_from_data(type=pedestrian, id=id) # TODO: make type assignment dynamic
+            mask = self.ids == id
+            node_data = self.data.loc[mask]
+            node = Node(
+                type=None, # TODO: add dynamic type allocation
+                id=id,
+                data=node_data,
+            )
+            self._nodes.append(node)
 
-    def remove_node(self, node: Node) -> None:
-        self.nodes.remove(node)
-
-    def set_X_cols(self, cols: List[str]) -> None:
-        self.X_cols = cols
-
-    def set_y_cols(self, cols: List[str]) -> None:
-        self.y_cols = cols
-
-    def set_H(self, H: int) -> None:
-        self.H = H
-
-    def set_F(self, F: int) -> None:
-        self.F = F
+    def remove_node(self, id: int) -> None:
+        node = self.get_node_by_id(id)
+        self._nodes.remove(node)
 
     @property
-    def X(self):
-        import numpy as np
-        self.nodes = [self.get_node_by_id(100)]
-        tmp = [node.X(self.H, self.X_cols) for node in self.nodes]
-        tmp = np.array(tmp)
-        print(tmp.shape)
-        return [node.X(self.H, self.X_cols) for node in self.nodes]
+    def robot(self) -> Node:
+        for node in self._nodes:
+            if node.is_robot:
+                return node
 
-    @property
-    def y(self): 
-        return [node.y(self.F, self.y_cols) for node in self.nodes]
+    @robot.setter
+    def robot(self, id: int) -> None:
+        robot = self.robot
+        robot.is_robot = False
+        node = self.get_node_by_id(id)
+        node.is_robot = True
+
+    # def X(self, H: int, cols: Optional[List[str]]):
+    #     return [node.X(H, cols) for node in self.nodes]
+
+    # def y(self, F: int, cols: Optional[List[str]]): 
+    #     return [node.y(F, cols) for node in self.nodes]
+
+
+    def filter(self, timestamps: Optional[List[int]] = None, ids: Optional[List[int]] = None, columns: Optional[List[str]] = None):
+        '''
+        Method for 
+        
+        :param timestmaps:
+        :param ids: 
+        :param cols:       
+        :return:  
+        '''
+        if timestamps is None:
+            timestamps = self.timestamps
+        if ids is None:
+            ids = self.ids
+        if columns is None:
+            columns = self._dataset.header       
+
+        mask1 = self.data['t'].isin(timestamps) 
+        mask2 = self.data['id'].isin(ids)        
+        rows  = mask1 & mask2
+        return self.data.loc[rows, columns].to_numpy()
+
+    def get_neighbors(self, node_id: int, timestamp: int, include_node_i: bool = False):
+        node = self.get_node_by_id(node_id)
+        print(node)
+
+            # if timestamp not in node.timestamps:
+            #     raise NotImplementedError
+            
+            # # get all relevent node data
+            # data = self.filter(timestamps=list(timestamp))
+            # print(data)
+
+        
+
+        
+
+
+    # def get_neighbours(self, id: int, t: int, include_node_i: bool = False):
+    #     """
+    #     Returns an array with the neighbour nodes of node_i wihtin the perception range at time t
+    #     Parameters
+    #     ----------
+    #     Args:
+    #         id : node id.
+    #         timestamp : timestamp.
+    #     Returns
+    #     -------
+    #     neighbours : array with neighbour nodes
+    #     """
+        
+        
+
+
+    #     df_node_i = self.filter_data(id=id, t = t)
+    #     df_nodes  = self.filter_data(t = t)
+        
+    #     if (len(df_node_i)==0 or len(df_nodes)==0):
+    #         print('No data available for given t (and node id)')
+    #         neighbours = np.array([])
+    #     else:      
+    #         pos_node_i = np.array([df_node_i['x'].values * np.ones(len(df_nodes)), 
+    #                                df_node_i['y'].values * np.ones(len(df_nodes))])
+    #         pos_nodes  = np.array([df_nodes['x'], df_nodes['y']])
+    #         distances  = np.linalg.norm(pos_nodes - pos_node_i, axis = 0)
+    #         perception_logic = (distances <= self.attention_radius)
+    #         not_node_i = (distances != 0) 
+    #         if include_node_i:
+    #             not_node_i = True
+    #         neighbours = df_nodes['id'][not_node_i * perception_logic].values 
+        
+    #     return neighbours
+
+
+    def get_batch(self, id, t):
+        """
+        Return batch for node i and time t
+        
+        Parameters
+        ------
+        id
+        t
+        Returns
+        -------
+        batch : [x_i:           seq_H x input_states
+                 x_neighbours:  seq_H x input_states (aggregated)
+                 x_R:           seq_H x states
+                 x_i_fut:       seq_F x input_states
+                 
+                 y_i:           seq_F x output_states]
+        """
+        x_R = []
+        x_neighbours = []
+        
+        if self.use_robot_node:
+            raise NotImplementedError
+            x_R = []
+        
+        if self.use_edge_nodes:
+            neighbours = self.get_neighbours(id = id, t = t)
+            x_neighbours = []
+            for neighbour in neighbours:
+                #TODO normalize neighbour data (relative state + standardize)
+                x_neighbour = self.time_window(t-(self.H+1), t, self.input_cols, id=neighbour)
+                if len(x_neighbour)==self.H+1: #TODO: right now we only take into account neighbours with enoug data, but this does not have to be the case
+                    x_neighbours.append(x_neighbour)
+
+            x_neighbours = np.array(x_neighbours).reshape((-1, self.H+1, self.input_states)) 
+
+            if self.aggregation_operation == 'sum':
+                x_neighbours = np.sum(x_neighbours, axis=0)
+            else:
+                raise NotImplementedError
+ 
+        x_i = self.time_window(t-(self.H+1), t, self.input_cols, id=id)
+        x_i_fut = self.time_window(t, t+self.F, self.input_cols, id=id)
+        y_i = self.time_window(t, t+self.F, self.output_cols, id=id)
+         
+        return x_i, x_i_fut, y_i, x_R, x_neighbours
+        
+    def get_batches(self):
+        """
+        Iterate over all nodes and times and return batch data of scene
+        Returns
+        -------
+        X_i : history of node i:                     seq_H+1 x N x input states.
+        X_i_fut : future of node i:                  seq_F   x N x input states
+        Y_i : label for node i:                      seq_F   x N x output states
+        X_neighbours : Aggregated neighbour data:    seq_H+1 x N x input states
+        """
+        
+        X_i         = torch.zeros((self.H+1, 1, self.input_states))
+        X_i_fut     = torch.zeros((self.F, 1, self.input_states))
+        Y_i         = torch.zeros((self.F, 1, self.output_states))
+        X_neighbours= torch.zeros((self.H+1, 1, self.input_states))
+        
+        for id in self.ids:
+            t_range = self.filter_data(id = id)['t'].values
+            for t in t_range:
+                x_i, x_i_fut, y_i, x_R, x_neighbours = self.get_batch(id, t) #TODO: make variable for if we use robot or not
+                if (len(x_i)==len(x_neighbours)== self.H+1 and len(x_i_fut)==len(y_i)==self.F): # only store data if sequence long enough
+                
+                    ### convert to pytorch tensor and reshape:
+                    x_i          = torch.tensor(x_i).reshape((self.H+1, 1, self.input_states))
+                    x_neighbours = torch.tensor(x_neighbours).reshape((self.H+1, 1, self.input_states))
+                    y_i          = torch.tensor(y_i).reshape((self.F, 1, self.output_states))
+                    x_i_fut      = torch.tensor(x_i_fut).reshape((self.F, 1, self.input_states))     
+                    
+                    X_i         = torch.cat((X_i, x_i), dim=1)
+                    X_i_fut     = torch.cat((X_i_fut, x_i_fut), dim=1)
+                    Y_i         = torch.cat((Y_i, y_i), dim=1)
+                    X_neighbours= torch.cat((X_neighbours, x_neighbours), dim=1)
+                    
+        return X_i, X_i_fut, Y_i, X_neighbours
 
 
 
 
 
 
+path = r'trajectron-reproduction\data\pedestrians\eth\train\biwi_hotel_train.csv'
+dataset = CSVDataset(path)
+dataset.load(header=0)
+dataset.validate()
+scene = Scene(dataset)
+scene.add_node_from_dataset()
+scene.get_neighbors(1, 1600)
 
 
-pedestrian = NodeType('pedestrian')
-scene = Scene(path, header=0)
-
-scene.add_nodes_from_data()
-scene.set_X_cols(['x', 'y', 'dx', 'dy'])
-scene.set_y_cols(['dx', 'dy'])
-scene.set_H(20)
-scene.set_F(10)
-
-node = scene.get_node_by_id(100)
-# node.X(100, ['t', 'id'])
-
-scene.X
 
 
 # class IDK(object):
-#     '''
+
+#     def __init__(self, model) -> None:
+#         if not isinstance(model, nn.Module):
+#             raise NotImplementedError
+#         self._model = model
+
+
+#         # add device / cuda AND model = model.to(device)
+
+
+
+#     def __call__(self, x):
+#         # simple forward pass of the model with input x: return y = self._model(x)
+#         pass
+
     
-#     '''
-#     def __init__(self, path: str, X_cols: List[str], y_cols: List[str]) -> None:        
-#         df = pd.read_csv(path, header=0)
-#         self.X = df[X_cols]
-#         self.y = df[y_cols]
 
-#     @property
-#     def X(self):
-#         return self.X
 
-#     @property
-#     def y(self):
-#         return self.y    
+#     def train(train_loader, net, optimizer, criterion):
+#         """
+#         Trains network for one epoch in batches.
+
+#         Args:
+#             train_loader: Data loader for training set.
+#             net: Neural network model.
+#             optimizer: Optimizer (e.g. SGD).
+#             criterion: Loss function (e.g. cross-entropy loss).
+#         """
     
-#     def get_node_timestep_data(self, id: int, t: int, H: int, F: int):
-#         '''
-        
-#         '''
-#         X = self.X
-#         y = self.y
-    
-#         X_node = X.loc[X['id'] == id]
-#         X_batch = X_node.loc[X_node['t'] > t-H]
-#         X_batch = X_batch.loc[X_batch['t'] <= t]
-        
-#         y_node = y.loc[y['id'] == id]
-#         y_batch = y_node.loc[y_node['t'] > t]
-#         y_batch = y_batch.loc[y_batch['t'] <= t+F]
+#         avg_loss = 0
+#         correct = 0
+#         total = 0
 
-#         return X_batch, y_batch
+        # # iterate through batches
+        # for i, data in enumerate(train_loader):
+        #     # get the inputs; data is a list of [inputs, labels]
+        #     inputs, labels = data
 
-#     def get_node_data(self, node: int, H, F):
-#         timestamps = self.X['t'].unique()
-#         return [self.node_batch(node, t, H, F) for t in timestamps]
+        #     # zero the parameter gradients
+        #     optimizer.zero_grad()
 
-#     def get_data(self, t: int, H, F):
-#         nodes = self.X['id'].unique()
-#         return [self.batch(node, t, H, F) for node in nodes]
+    #         # forward + backward + optimize
+    #         outputs = net(inputs)
+    #         loss = criterion(outputs, labels)
+    #         loss.backward()
+    #         optimizer.step()
 
-#     # def scatterplot(self, ids: List[int]) -> None:
-#     #     for id in ids:
-#     #         self.plot_node(id)
+    #         # keep track of loss and accuracy
+    #         avg_loss += loss
+    #         _, predicted = torch.max(outputs.data, 1)
+    #         total += labels.size(0)
+    #         correct += (predicted == labels).sum().item()
 
-#     # def scatterplot_node(self, id: int, scaling: int == 1) -> None:
-#     #     '''
-#     #     Args: 
-#     #             id: node id
-#     #             scaling:
-#     #     '''
-#     #     X_node = self.X.loc[self.X['id'] == id]
-#     #     plt.scatter(X_node['x'], X_node['y'], s=(scaling*self.X['t']))
+    #     return avg_loss/len(train_loader), 100 * correct / total
 
 
+    # def train(self, train_loader, optimizer, criterion, device):
+    #     pass
 
+    # def test():
+    #     pass
 
+    # def evaluate():
+    #     pass
 
-# data_eth = IDK(path, X_cols=['t', 'id', 'x', 'y', 'dx', 'dy'], y_cols=['t', 'id', 'dx', 'dy'])
+    # def run(self):
+    #     pass
