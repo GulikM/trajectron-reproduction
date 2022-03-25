@@ -1,0 +1,9 @@
+number_of_cars: 5
+number_of_pedestrians: 7
+lstm:
+  nested_2:
+    variable: getattr
+    my_value: 19
+    illegal_list:
+      - getattr
+      - setattr
