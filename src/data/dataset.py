@@ -2,7 +2,7 @@ import inspect
 import pandas as pd
 
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Optional, Union
 
 
 class Dataset(object):
@@ -47,7 +47,7 @@ class Dataset(object):
                 del self.params[key]
 
     def __call_all(self, startswith: str):
-        members = inspect.getmembers(self, predicate=inspect.ismethod)
+        members = inspect.getmembers(self, predicate=inspect.ismethod) # class methods
         for name, value in members:
             if name.startswith(startswith) and callable(value):
                 value()
@@ -57,7 +57,7 @@ class Dataset(object):
 
 
 class CSVDataset(Dataset):  
-    required_columns = None
+    required_columns: Optional[List[str]] = None
 
     def __init__(self, path: Union[str, Path]) -> None:
         super().__init__(path)
@@ -94,12 +94,13 @@ class CSVDataset(Dataset):
         self._data.set_index([col])
 
     def validate_header(self) -> None:
-        if self.__class__.required_columns:
-            for col in self.__class__.required_columns:
-                if not col in self.header:
-                    raise NotImplementedError # TODO: add appropriate exception
+        if not (required := self.__class__.required_columns):
+            return
+        for col in required:
+            if not col in self.header:
+                raise NotImplementedError # TODO: add appropriate exception
 
-    def filter(self, row_filters: Dict[str, Any] = {}, columns: List[str] = []) -> pd.DataFrame:        
+    def filter(self, row_filters: Optional[Dict[str, Any]] = None, columns: Optional[List[str]] = None) -> pd.DataFrame:        
         '''
         
 
@@ -109,7 +110,6 @@ class CSVDataset(Dataset):
 
         Returns:
             A subset of the dataset
-
         '''
         if not columns:
             columns = self.header  # select all valid columns
@@ -118,6 +118,7 @@ class CSVDataset(Dataset):
             return self.data[columns]
     
         masks = []
+        # create boolean mask per row filter
         for key, value in row_filters.items():
             if not key in columns:
                 raise KeyError(f'{key} not in {columns}')
@@ -127,7 +128,11 @@ class CSVDataset(Dataset):
         rows = [all(tup) for tup in zip(*masks)] # combine masks 
         return self.data[rows, columns]
 
-    # def pop(self, item: str, transposed: bool = False, copy: bool = False) -> pd.Series:
+
+
+
+
+    # def pop(self, item: str, transpose: bool = False, copy: bool = False) -> pd.Series:
     #     '''
     #     Return item and drop from frame. Raise KeyError if not found.
         
@@ -139,7 +144,7 @@ class CSVDataset(Dataset):
     #     Returns:
     #         ....
     #     '''
-    #     if transposed:
+    #     if transpose:
     #         df = self.data.transpose(copy=copy) # TODO: check if better to assign _data property directly to df instead of calling data getter
     #     else:
     #         df = self.data

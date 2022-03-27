@@ -26,15 +26,6 @@ class Node(object):
     #         if getattr(inst, key) == value:
     #             return inst
 
-    # def get_neighbors_at_timestamp(self, timestamp: int):
-
-
-
-
-
-    #     return [node for node in self.__class__.instances if node.id != self.id]
-
-
     # def time_window(self, upper_bound: int, lower_bound: int, cols: Optional[List[str]]):
     #     '''
     #     Method for 
