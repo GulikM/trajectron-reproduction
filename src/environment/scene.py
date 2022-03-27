@@ -10,6 +10,10 @@ class Scene(object):
         self._dataset = dataset
         self._nodes = []
 
+
+
+
+
     # def __getitem__(self, key: str):
     #     if key == "t":
     #         return self.timestamps()
@@ -17,6 +21,9 @@ class Scene(object):
     #         return self.ids()
     #     else:
     #         return self._dataset.data.__getitem__(key)
+
+
+
 
     @property
     def data(self):
@@ -34,16 +41,15 @@ class Scene(object):
     def ids(self):
         return self.data['id'].unique()
 
+
+
     def get_node(self, id: int) -> Node:
         for node in self._nodes:
             if node.id == id:
                 return node
         raise NotImplementedError # catchall
 
-
     def add_node(self, id: int) -> None:
-        '''
-        '''
         mask = self.ids == id
         node_data = self.data.loc[mask]
         node = Node(
@@ -54,15 +60,13 @@ class Scene(object):
         self._nodes.append(node)
 
     def add_nodes(self, ids: Optional[List[int]]):
-        '''
-        '''
         if ids is None:
             ids = self.ids
         for id in ids:
             self.add_node(id)
 
     def remove_node(self, id: int) -> None:
-        node = self.get_node_by_id(id)
+        node = self.get_node(id)
         self._nodes.remove(node)
 
     @property
@@ -77,88 +81,44 @@ class Scene(object):
         bot = self.robot
         bot.is_robot = False
         # assign new robot
-        node = self.get_node_by_id(id)
+        node = self.get_node(id)
         node.is_robot = True
+
+
+
+
+
+
+
+
 
     def get_neighbors(self, id: int, timestamp: int):
         '''
-        Return states of all nodes within perception range of node at timestamp.
-
+        
         Args:
-            id: 
-            timestamp: 
+            id: node id for which we return the neighbors data
+            timestamp:  
         '''
+
         node = self.get_node(id)
 
         if not timestamp in node.timestamps:
-            raise NotImplementedError # TODO: add appropriate exception
+            raise KeyError(f'{timestamp} not in {node.timestamps}')
 
         data = self._dataset.filter(row_filters={
             't': timestamp
         })
 
         
-
-
-
-
-
-
-
-
-
-        neighbor_ids = self.ids.pop(id)
-
-        subset = self._dataset.filter(row_filters={'t': list(timestamp)})
-        # separate node data from the neighbors
-        nodedata = subset[subset['id'] == id]
+        mask = data['id'] == id
+        # split dataset
+        node_data = data.loc[mask]
+        neighbors_data = data.loc[not mask]
 
         
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    def get_neighbors(self, node_id: int, timestamp: int, include_node_i: bool = False):
-        '''
-        Method for 
-
-        Args:
-            node: Node for which all neighbors are returned
-        '''
-        
-        
-        node = self.get_node_by_id(node_id)
-        
-        print(node)
-
-
-
-
-
-
-
-
-            # if timestamp not in node.timestamps:
-            #     raise NotImplementedError
-            
-            # # get all relevent node data
-            # data = self.filter(timestamps=list(timestamp))
-            # print(data)
-
-        
-
-        
+        print(node_data)
+        print(neighbors_data)
 
 
     # def get_neighbours(self, id: int, t: int, include_node_i: bool = False):
@@ -286,5 +246,6 @@ dataset = CSVDataset(path)
 dataset.load(header=0)
 dataset.validate()
 scene = Scene(dataset)
-scene.add_node_from_dataset()
-scene.filter(row_filters={'haha': 0, 'hihi': 1})
+scene.add_nodes()
+
+scene.get_neighbors(timestamp=100)
