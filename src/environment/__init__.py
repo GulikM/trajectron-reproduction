@@ -1,3 +1,3 @@
 from .node import Node
-from .nodetype import NodeType
-from .scene import Scene, pedestrian
+from .nodetype import NodeType, pedestrian
+from .scene import Scene
