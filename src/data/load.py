@@ -3,28 +3,10 @@ import pandas as pd
 
 from pathlib import Path
 from typing import Union
+from src.util import Validated
 
 
-class Validated(object):
-    def __call_all(self, start: str):
-        def _predicate(member):
-            return inspect.isfunction(member) and (not start or member[0].startswith(start))
-        [func() for _, func in inspect.getmembers(self, predicate=_predicate)]
-
-    def validate(self):
-        self.__call_all('validate_')
-
-
-class Foo(Validated):
-    def validate_name(self):
-        print(f"HEY I'm {type(self)}")
-
-f = Foo()
-f.validate()
-
-
-
-class Dataset(object, Validated):
+class Dataset(Validated):
     def __init__(self, path: Union[str, Path]) -> None:
         self.path = path # call setter
         self._data = None
@@ -66,15 +48,6 @@ class Dataset(object, Validated):
             if self.params and key in self.params:
                 del self.params[key]
 
-    def __call_all(self, startswith: str):
-        members = inspect.getmembers(self, predicate=inspect.ismethod)
-        for name, value in members:
-            if name.startswith(startswith) and callable(value):
-                value()
-
-    def validate(self):
-        self.__call_all('validate_')
-
 
 class CSVDataset(Dataset):  
     required_columns = None
@@ -112,6 +85,6 @@ class CSVDataset(Dataset):
         self._data.set_index([col])
 
     def validate_header(self) -> bool:
-        if self.__class__.required_columns is not None:
-            if not self.__class__.required_columns in self.header:
-                raise NotImplementedError
+        if self.__class__.required_columns is not None and self.__class__.required_columns not in self.header:
+            raise NotImplementedError
+        return True
