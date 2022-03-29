@@ -86,7 +86,8 @@ GRU_size = 128
 class model(nn.Module):
     def __init__(self, input_size, H, F, hidden_history, hidden_interactions, hidden_future, GRU_size, batch_first, K_p, N_p, K_q, N_q):
         super(model, self).__init__()
-        
+
+        # initialize parameters for the different layers
         self.input_size = input_size
         self.H = H
         self.F = F
@@ -99,6 +100,9 @@ class model(nn.Module):
         self.K_q = K_q
         self.N_q = N_q
         self.GRU_size = GRU_size
+
+
+        # Below the initialization of the layers used in the model
         """
         LSTM layer that takes two inputs, x and y, has a hidden state of 32 dimensions (aka 32 features),
         consists of one layer, and takes data as input that is not batchfirst
@@ -176,6 +180,7 @@ class model(nn.Module):
         Output is ???
         """
     
+    # Below functions that are used in between layers
     """
     Below a normalize function that needs to be used after producting the distribution matrices M_p and M_q
     """
@@ -199,10 +204,8 @@ class model(nn.Module):
     """    
     def one_hot_encode_M(self, M):
         return 
-    """
-    Forward function, this applies the encode, reparameterize and decoding functions
-    Predicts future based on (batch of) data
-    """   
+    
+    # This is the function that implements all the layers with functions in between
     def forward(self,x_i, x_neighbour, x_i_fut, y_i):
         pass
 
