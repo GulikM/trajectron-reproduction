@@ -28,39 +28,6 @@ torch.manual_seed(SEED)
 torch.cuda.manual_seed(SEED)
 torch.backends.cudnn.deterministic = True
 
-batch_size = 128
-learning_rate = 0.005
-input_size = 32 # hidden state from lstm
-hidden_size = 12 # 
-labels_length = 25 # 25 in motion primitives
-
-transform = transforms.Compose(
-    [transforms.ToTensor(),
-    transforms.Normalize((0.5,), (0.5,))
-])
-
-dataset = MNIST('./data', transform=transform, download=True)
-train_data, test_data = data.random_split(dataset, (50000,10000))
-
-train_dataset = DataLoader(train_data, batch_size=batch_size, shuffle=True)
-val_dataset = DataLoader(test_data, batch_size=batch_size, shuffle=True)
-
-#helper functions
-def one_hot(x, max_x):
-    return torch.eye(max_x + 1)[x]
-
-
-    
-def plot_loss(history):
-    loss, val_loss = zip(*history)
-    plt.figure(figsize=(15, 9))
-    plt.plot(loss, label="train_loss")
-    plt.plot(val_loss, label="val_loss")
-    plt.legend(loc='best')
-    plt.xlabel("epochs")
-    plt.ylabel("loss")
-    plt.show()
-
 num_epochs = 1000
 learning_rate = 0.01
 
