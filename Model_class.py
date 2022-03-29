@@ -81,9 +81,10 @@ hidden_future = 32
 
 batch_first = False
 
+GRU_size = 128
 
 class model(nn.Module):
-    def __init__(self, input_size, H, F, hidden_history, hidden_interactions, hidden_future, batch_first, K_p, N_p, K_q, N_q):
+    def __init__(self, input_size, H, F, hidden_history, hidden_interactions, hidden_future, GRU_size, batch_first, K_p, N_p, K_q, N_q):
         super(model, self).__init__()
         
         self.input_size = input_size
@@ -97,7 +98,7 @@ class model(nn.Module):
         self.N_p = N_p
         self.K_q = K_q
         self.N_q = N_q
-        
+        self.GRU_size = GRU_size
         """
         LSTM layer that takes two inputs, x and y, has a hidden state of 32 dimensions (aka 32 features),
         consists of one layer, and takes data as input that is not batchfirst
@@ -158,8 +159,16 @@ class model(nn.Module):
         GRU layer for decoding
         Input is of size K_p*N_p
         """
+        # K_q**N_q is latent variable z_i
+        # Done once to initialize the first hidden state for the GRU
+        self.hidden_state_GRU = nn.Linear(self.K_q**self.N_q,
+                                          self.GRU_size)
 
-        self.gru = nn.GRU(input_size=K_p*N_p, hidden_size=128,num_layers=1, batch_first=False) 
+
+        self.gru = nn.GRU(input_size=hidden_history*hidden_interactions*K_q**N_q, 
+                          hidden_size=self.GRU_size,
+                          num_layers=1, 
+                          batch_first=self.batch_first) 
 
         """
         Gaussian mixture model (GMM) for additional regularization
@@ -170,8 +179,13 @@ class model(nn.Module):
     """
     Below a normalize function that needs to be used after producting the distribution matrices M_p and M_q
     """
-    def normalize(self, x):
-        pass
+    def normalize(self, M_flat, N, K):
+        M = M_flat.view(N, K)
+        M_exp = np.exp(M)
+        row_sums = M_exp.sum(axis=1)
+        M_normalized_exp = M_exp / row_sums[:, np.newaxis]
+        M_normalized = np.log(M_normalized_exp)
+        return M_normalized
 
     """
     Below a integrate function that needs to be used after producting the distributions according to the GMM
@@ -181,13 +195,10 @@ class model(nn.Module):
         pass
 
     """
-    Reparameterize function that produces latent variable z based on matrix M_p, using N and K (not mu and variance)
+    Sample function that produces latent variable z based on matrix M_p, using N and K (not mu and variance)
     """    
-    def reparameterize(self, mu, logvar):
-        std = torch.exp(0.5 *logvar)
-        eps = torch.randn_like(std)
-        return eps.mul(std).add_(mu)
-
+    def one_hot_encode_M(self, M):
+        return 
     """
     Forward function, this applies the encode, reparameterize and decoding functions
     Predicts future based on (batch of) data
@@ -195,6 +206,11 @@ class model(nn.Module):
     def forward(self,x_i, x_neighbour, x_i_fut, y_i):
         pass
 
+
+
+# BELOW AN OLD TRAINING FUNCTION THAT IS NOT GONNA BE USED
+# Can be used as 'inspiration' for the real training function
+"""
 
 def train_cvae(net, dataloader, test_dataloader, flatten=True, epochs=20):
     validation_losses = []
@@ -253,3 +269,6 @@ plt.legend(loc='best')
 plt.xlabel("epochs")
 plt.ylabel("loss")
 plt.show()
+
+
+"""
