@@ -70,12 +70,33 @@ num_layers = 1
 H = 3
 F = 3
 num_classes = 2
+K_p = 25
+N_p = 1
+K_q = 25
+N_q = 1
+
+hidden_history = 32
+hidden_interactions = 8
+hidden_future = 32
+
+batch_first = False
+
 
 class model(nn.Module):
-    def __init__(self, input_size, hidden_size=20):
+    def __init__(self, input_size, H, F, hidden_history, hidden_interactions, hidden_future, batch_first, K_p, N_p, K_q, N_q):
         super(model, self).__init__()
-        input_size_with_label = input_size + labels_length
-        hidden_size += labels_length
+        
+        self.input_size = input_size
+        self.H = H
+        self.F = F
+        self.hidden_history = hidden_history
+        self.hidden_interactions = hidden_interactions
+        self.hidden_future = hidden_future
+        self.batch_first = batch_first
+        self.K_p = K_p
+        self.N_p = N_p
+        self.K_q = K_q
+        self.N_q = N_q
         
         """
         LSTM layer that takes two inputs, x and y, has a hidden state of 32 dimensions (aka 32 features),
@@ -83,7 +104,10 @@ class model(nn.Module):
         output is ex, the hidden state with 32 dimensions
         """
 
-        self.history = nn.LSTM(input_size=2, hidden_size=32,num_layers=1, batch_first=False) 
+        self.history = nn.LSTM(input_size=self.input_size, 
+                               hidden_size=self.hidden_history,
+                               num_layers=1, 
+                               batch_first=self.batch_first) 
 
         """
         Below a placeholder LSTM for the edges for modeling the interactions between pedestrians
@@ -91,22 +115,27 @@ class model(nn.Module):
         What is the input size???
         """
 
-        #self.interactions = nn.LSTM(input_size=2, hidden_size=8,num_layers=1, batch_first=False) 
-
-
-        """
-        Attention layer needs to be incorperated below
-        """
-
-        # ADDITIVE ATTENTION LAYER HERE
+        self.interactions = nn.LSTM(input_size=self.input_size,
+                                    hidden_size=self.hidden_interactions,
+                                    num_layers=1, 
+                                    batch_first=self.batch_first) 
 
         """
         Bidirectional LSTM for the prediction of the node future that is used in the kull leibner loss function.
         Input is ground truth, which is right now x and y (later vx and vy as well)
         Output is 32 dimensional hidden state that encodes the nodes future, called ey
         """
+        # Use linear layer once to initialize the first long term and short term states
 
-        self.future = nn.LSTM(input_size=2, hidden_size=32,num_layers=1, batch_first=False, bidirectional=True) 
+        self.hidden_states = nn.Linear(self.F*input_size, 
+                                       2*hidden_future) # 2 times since hidden_future size since long term and short term memory need to be initialized
+
+
+        self.future = nn.LSTM(input_size=self.input_size, 
+                              hidden_size=self.hidden_future,
+                              num_layers=1, 
+                              batch_first=self.batch_first, 
+                              bidirectional=True) 
 
         """
         fully connected layer to predict K_p x N_p matrix for discrete distribution P
@@ -114,14 +143,16 @@ class model(nn.Module):
         output is flattened KxN matrix
         """
         # K and N still need to be defined (their sizes)
-        self.fcP = nn.Linear(32, K_p*N_p)
+        self.fcP = nn.Linear(self.hidden_history*self.hidden_interactions, 
+                             self.K_p*self.N_p)
         # K are columns, they still need to be forced to a one-hot encoding using a proper activation function
         """
         Two fully connected layers to predict K_q and N_q for discrete distribution Q.
         It takes as input the concatenation of ex and ey
         """
 
-        self.fcQ = nn.Linear(64, K_q*N_q)
+        self.fcQ = nn.Linear(self.hidden_history*self.hidden_interactions*self.hidden_future, 
+                             self.K_q*self.N_q)
 
         """
         GRU layer for decoding
@@ -150,23 +181,6 @@ class model(nn.Module):
         pass
 
     """
-    Encoding function
-    """
-    def encode(self, x, labels):
-        x = x.view(-1, 1*28*28) # flatten
-        x = torch.cat((x, labels), 1) # concatenate with labels
-        x = self.relu(self.fc1(x)) # fully connected with relu
-        return self.fc21(x), self.fc22(x) # return mean and variance
-    
-    """
-    Decoding function that takes latent variable z and produces the predicted future
-    """   
-    def decode(self, z, labels):
-        torch.cat((z, labels), 1) # concatenate latent variable with the labels
-        z = self.relu(self.fc3(z)) # fully connected layer with relu
-        return torch.sigmoid(self.fc4(z)) # fully connected layer with sigmoid
-
-    """
     Reparameterize function that produces latent variable z based on matrix M_p, using N and K (not mu and variance)
     """    
     def reparameterize(self, mu, logvar):
@@ -178,12 +192,9 @@ class model(nn.Module):
     Forward function, this applies the encode, reparameterize and decoding functions
     Predicts future based on (batch of) data
     """   
-    def forward(self,x, labels):
-        #targets = one_hot(targets,labels_length-1).float().to(DEVICE)
-        mu, logvar = self.encode(x, labels)
-        z = self.reparameterize(mu, logvar) # sample latent variable
-        x = self.decode(z, labels) # 
-        return x, mu, logvar
+    def forward(self,x_i, x_neighbour, x_i_fut, y_i):
+        pass
+
 
 def train_cvae(net, dataloader, test_dataloader, flatten=True, epochs=20):
     validation_losses = []
