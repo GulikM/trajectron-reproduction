@@ -87,7 +87,7 @@ class model(nn.Module):
         What is the input size???
         """
 
-        self.interactions = nn.LSTM(input_size=self.input_size,
+        self.interactions = nn.LSTM(input_size=2*self.input_size, # 2 times since concatanation of node position and pedestrian interaction vector
                                     hidden_size=self.hidden_interactions,
                                     num_layers=1, 
                                     batch_first=self.batch_first) 
@@ -186,12 +186,11 @@ class model(nn.Module):
 
 
         # Initialize first hidden short and long term states for interactions lstm   
-        self.state_interactions_size = x_neighbour.size(dim=1) + x_i.size(dim=1)
-        self.h_0_interactions = Variable(torch.zeros(1, self.state_interactions_size, self.hidden_interactions))
-        self.c_0_interactions = Variable(torch.zeros(1, self.state_interactions_size, self.hidden_interactions))
+        self.h_0_interactions = Variable(torch.zeros(1, x_i.size(dim=1), self.hidden_interactions))
+        self.c_0_interactions = Variable(torch.zeros(1, x_i.size(dim=1), self.hidden_interactions))
 
         # Interactions forward:
-        x_interactions = torch.cat((x_i, x_neighbour), 1)
+        x_interactions = torch.cat((x_i, x_neighbour), 2) # concatenate over the features
         _, (self.interactions_h_out, c_out) = self.interactions(x_interactions, (self.h_0_interactions, self.h_0_interactions))
 
         
@@ -205,16 +204,16 @@ class model(nn.Module):
         # Future forward:
         _, (self.future_h_out, c_out) = self.future(x_i_fut, (self.h_0_future, self.c_0_future))
 
-        print(self.history_h_out.shape)
-        print(self.interactions_h_out.shape)
-        print(self.future_h_out.shape)
+    
         # Create e_x and e_y
-        self.e_x = torch.cat((self.history_h_out, self.interactions_h_out), 1)
+        self.e_x = torch.cat((self.history_h_out, self.interactions_h_out), 2)
         self.e_y = self.future_h_out
 
 
         # Create inputs that generate discrete distributions matrices M_q and M_p
-        self.input_M_q = torch.cat((self.e_x, self.e_y), 1)
+        print(self.e_x.shape)
+        print(self.e_y.shape) # e_y shape is (2,100,32) ipv (1,100,32), komt door bidirectional lstm, hoe moet t gefixt worden?                         
+        self.input_M_q = torch.cat((self.e_x, self.e_y), 2)
         self.input_M_p = self.e_x
 
         # Create the matrices of discrete distributions Q and P
