@@ -99,8 +99,9 @@ class model(nn.Module):
         """
         # Use linear layer once to initialize the first long term and short term states
 
-        self.hidden_states = nn.Linear(self.F*input_size, 
-                                       2*hidden_future) # 2 times since hidden_future size since long term and short term memory need to be initialized
+        self.hidden_states_fut = nn.Linear(self.input_size, 
+                                           2*2*self.hidden_future) # 2 times since hidden_future size since long term and short term memory need to be initialized
+                                                                 # also 2 times for the bidirectional part
 
 
         self.future = nn.LSTM(input_size=self.input_size, 
@@ -153,10 +154,10 @@ class model(nn.Module):
     """
     def normalize(self, M_flat, N, K):
         M = M_flat.view(N, K)
-        M_exp = np.exp(M)
+        M_exp = torch.exp(M)
         row_sums = M_exp.sum(axis=1)
         M_normalized_exp = M_exp / row_sums[:, np.newaxis]
-        M_normalized = np.log(M_normalized_exp)
+        M_normalized = torch.log(M_normalized_exp)
         return M_normalized
 
     """
@@ -172,73 +173,71 @@ class model(nn.Module):
     def one_hot_encode_M(self, M):
         return 
     
-    # This is the function that implements all the layers with functions in between
-    def forward(self,x_i, x_neighbour, x_i_fut, y_i):
-        pass
+    # This is the function that implements all the layers with functions in between for TRAINING
+    def forward(self ,x_i, x_neighbour, x_i_fut, y_i):
+
+        # Initialize first hidden short and long term states for history lstm
+        self.h_0_history = Variable(torch.zeros(1, x_i.size(dim=1), self.hidden_history))
+        self.c_0_history = Variable(torch.zeros(1, x_i.size(dim=1), self.hidden_history))
+        
+        # History forward:
+        _, (self.history_h_out, c_out) = self.history(x_i, (self.h_0_history, self.c_0_history))
+        
 
 
+        # Initialize first hidden short and long term states for interactions lstm   
+        self.state_interactions_size = x_neighbour.size(dim=1) + x_i.size(dim=1)
+        self.h_0_interactions = Variable(torch.zeros(1, self.state_interactions_size, self.hidden_interactions))
+        self.c_0_interactions = Variable(torch.zeros(1, self.state_interactions_size, self.hidden_interactions))
 
-# BELOW AN OLD TRAINING FUNCTION THAT IS NOT GONNA BE USED
-# Can be used as 'inspiration' for the real training function
-"""
+        # Interactions forward:
+        x_interactions = torch.cat((x_i, x_neighbour), 1)
+        _, (self.interactions_h_out, c_out) = self.interactions(x_interactions, (self.h_0_interactions, self.h_0_interactions))
 
-def train_cvae(net, dataloader, test_dataloader, flatten=True, epochs=20):
-    validation_losses = []
-    optim = torch.optim.Adam(net.parameters())
+        
+        # Initialize first hidden short and long term states for future lstm
+        self.fut_states = self.hidden_states_fut(x_i_fut).view(2,100,64)
 
-    log_template = "\nEpoch {ep:03d} val_loss {v_loss:0.4f}"
-    with tqdm(desc="epoch", total=epochs) as pbar_outer:  
-        for i in range(epochs):
-            for batch, labels in dataloader:
-                batch = batch.to(DEVICE)
-                labels = one_hot(labels,9).to(DEVICE)
+        
+        self.h_0_future = self.fut_states[:,:,0 :self.hidden_future]
+        self.c_0_future = self.fut_states[:,:,self.hidden_future::]
+        
+        # Future forward:
+        _, (self.future_h_out, c_out) = self.future(x_i_fut, (self.h_0_future, self.c_0_future))
 
-                if flatten:
-                    batch = batch.view(batch.size(0), 28*28)
-
-                optim.zero_grad()
-                x,mu,logvar = net(batch, labels)
-                loss = vae_loss_fn(batch, x[:, :784], mu, logvar)
-                loss.backward()
-                optim.step()
-            evaluate(validation_losses, net, test_dataloader, flatten=True)
-            pbar_outer.update(1)
-            tqdm.write(log_template.format(ep=i+1, v_loss=validation_losses[i]))
-    return validation_losses
-
-cvae = CVAE(28*28).to(DEVICE)
-
-def vae_loss_fn(x, recon_x, mu, logvar):
-    BCE = F.binary_cross_entropy(recon_x, x, reduction='sum')
-    KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-    return BCE + KLD
-
-def evaluate(losses, autoencoder, dataloader, flatten=True):
-    model = lambda x, y: autoencoder(x, y)[0]    
-    loss_sum = []
-    loss_fn = nn.MSELoss()
-    for inputs, labels in dataloader:
-        inputs = inputs.to(DEVICE)
-        labels = one_hot(labels,9).to(DEVICE)
-
-        if flatten:
-            inputs = inputs.view(inputs.size(0), 28*28)
-
-        outputs = model(inputs, labels)
-        loss = loss_fn(inputs, outputs)            
-        loss_sum.append(loss)  
-
-    losses.append((sum(loss_sum)/len(loss_sum)).item())
-
-history = train_cvae(cvae, train_dataset, val_dataset)
-
-val_loss = history
-plt.figure(figsize=(15, 9))
-plt.plot(val_loss, label="val_loss")
-plt.legend(loc='best')
-plt.xlabel("epochs")
-plt.ylabel("loss")
-plt.show()
+        print(self.history_h_out.shape)
+        print(self.interactions_h_out.shape)
+        print(self.future_h_out.shape)
+        # Create e_x and e_y
+        self.e_x = torch.cat((self.history_h_out, self.interactions_h_out), 1)
+        self.e_y = self.future_h_out
 
 
-"""
+        # Create inputs that generate discrete distributions matrices M_q and M_p
+        self.input_M_q = torch.cat((self.e_x, self.e_y), 1)
+        self.input_M_p = self.e_x
+
+        # Create the matrices of discrete distributions Q and P
+        self.M_q = self.fcQ(self.input_M_q)
+        self.M_p = self.fcP(self.input_M_p)
+
+        # Normalize the matrices of each distribution
+        self.M_q_norm = self.normalize(self.M_q, self.N_q, self.K_q)
+        self.M_p_norm = self.normalize(self.M_p, self.N_p, self.K_p)
+
+        return 0
+
+    
+
+# For debugging the forward function and model
+# initialize model object
+net = model(input_size, H, F, hidden_history, hidden_interactions, hidden_future, GRU_size, batch_first, K_p, N_p, K_q, N_q)
+
+# some random data that is NOT batch first (timestep, batchsize, states)
+x_i = torch.rand(1, 100, 2)
+x_neighbour = torch.rand(1, 100, 2)
+x_i_fut = torch.rand(1, 100, 2)
+y_i = torch.rand(1, 100, 2)
+
+# do forward function
+net.forward(x_i, x_neighbour, x_i_fut, y_i)
