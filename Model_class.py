@@ -116,7 +116,7 @@ class model(nn.Module):
         output is flattened KxN matrix
         """
         # K and N still need to be defined (their sizes)
-        self.fcP = nn.Linear(self.hidden_history*self.hidden_interactions, 
+        self.fcP = nn.Linear(self.hidden_history + self.hidden_interactions, 
                              self.K_p*self.N_p)
         # K are columns, they still need to be forced to a one-hot encoding using a proper activation function
         """
@@ -124,7 +124,7 @@ class model(nn.Module):
         It takes as input the concatenation of ex and ey
         """
 
-        self.fcQ = nn.Linear(self.hidden_history*self.hidden_interactions*self.hidden_future, 
+        self.fcQ = nn.Linear(self.hidden_history + self.hidden_interactions + self.hidden_future, 
                              self.K_q*self.N_q)
 
         """
@@ -153,7 +153,8 @@ class model(nn.Module):
     Below a normalize function that needs to be used after producting the distribution matrices M_p and M_q
     """
     def normalize(self, M_flat, N, K):
-        M = M_flat.view(N, K)
+        batch_size = 100
+        M = M_flat.view(batch_size, N, K)
         M_exp = torch.exp(M)
         row_sums = M_exp.sum(axis=1)
         M_normalized_exp = M_exp / row_sums[:, np.newaxis]
@@ -207,12 +208,10 @@ class model(nn.Module):
     
         # Create e_x and e_y
         self.e_x = torch.cat((self.history_h_out, self.interactions_h_out), 2)
-        self.e_y = self.future_h_out
+        self.e_y = self.future_h_out[0, :, :].view(1, 100, 32)
 
 
         # Create inputs that generate discrete distributions matrices M_q and M_p
-        print(self.e_x.shape)
-        print(self.e_y.shape) # e_y shape is (2,100,32) ipv (1,100,32), komt door bidirectional lstm, hoe moet t gefixt worden?                         
         self.input_M_q = torch.cat((self.e_x, self.e_y), 2)
         self.input_M_p = self.e_x
 
