@@ -34,8 +34,8 @@ learning_rate = 0.01
 input_size = 2
 hidden_size = 32
 num_layers = 1
-H = 3
-F = 3
+History = 3
+Future = 3
 num_classes = 2
 K_p = 25
 N_p = 1
@@ -156,7 +156,11 @@ class model(nn.Module):
         batch_size = 100
         M = M_flat.view(batch_size, N, K)
         M_exp = torch.exp(M)
-        row_sums = M_exp.sum(axis=1)
+        if self.batch_first == False:
+            row_sums = M_exp.sum(axis=0)
+        else:
+            row_sums = M_exp.sum(axis=1)
+
         M_normalized_exp = M_exp / row_sums[:, np.newaxis]
         M_normalized = torch.log(M_normalized_exp)
         return M_normalized
@@ -172,7 +176,13 @@ class model(nn.Module):
     Sample function that produces latent variable z based on matrix M_p, using N and K (not mu and variance)
     """    
     def one_hot_encode_M(self, M):
-        return 
+        if self.batch_first == True:
+            idx = torch.argmax(M, dim=2)
+        else:
+            idx = torch.argmax(M, dim=2)
+        
+        M_one_hot = F.one_hot(idx, 25)
+        return M_one_hot
     
     # This is the function that implements all the layers with functions in between for TRAINING
     def forward(self ,x_i, x_neighbour, x_i_fut, y_i):
@@ -223,13 +233,22 @@ class model(nn.Module):
         self.M_q_norm = self.normalize(self.M_q, self.N_q, self.K_q)
         self.M_p_norm = self.normalize(self.M_p, self.N_p, self.K_p)
 
-        return 0
+        self.z = self.one_hot_encode_M(self.M_q_norm)
+
+        print(self.z.shape)
+
+        self.h_0_GRU = self.hidden_state_GRU(self.z.long())
+
+        _, self.hidden_state_GRU = self.gru(self.z, self.hidden_state_GRU)
+
+        self.y_pred = 0
+        return self.y_pred, self.M_p_norm, self.M_q_norm
 
     
 
 # For debugging the forward function and model
 # initialize model object
-net = model(input_size, H, F, hidden_history, hidden_interactions, hidden_future, GRU_size, batch_first, K_p, N_p, K_q, N_q)
+net = model(input_size, History, Future, hidden_history, hidden_interactions, hidden_future, GRU_size, batch_first, K_p, N_p, K_q, N_q)
 
 # some random data that is NOT batch first (timestep, batchsize, states)
 x_i = torch.rand(1, 100, 2)
