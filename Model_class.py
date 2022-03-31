@@ -68,6 +68,12 @@ class model(nn.Module):
         self.N_q = N_q
         self.GRU_size = GRU_size
 
+        # GMM model parameters
+        self.mus_size = 2
+        self.log_prob_size = 1
+        self.log_sigmas_size = 2
+        self.corrs_size = 1
+
 
         # Below the initialization of the layers used in the model
         """
@@ -147,7 +153,18 @@ class model(nn.Module):
         Input is hidden state of GRU, so 128 features,
         Output is ???
         """
-    
+        self.fc_mus = nn.Linear(self.GRU_size,
+                             self.mus_size)
+
+        self.fc_log_prob = nn.Linear(self.GRU_size,
+                                  self.log_prob_size)
+
+        self.fc_log_sigmas = nn.Linear(self.GRU_size,
+                                    self.log_sigmas_size)
+                                        
+        self.fc_corrs = nn.Linear(self.GRU_size,
+                               self.corrs_size)
+
     # Below functions that are used in between layers
     """
     Below a normalize function that needs to be used after producting the distribution matrices M_p and M_q
@@ -242,8 +259,16 @@ class model(nn.Module):
         self.input_GRU = torch.cat((self.z_q, self.e_x, x_i), dim=2)
         
         # Decode with GRU layer, outputting a tensor with 128 features
-        _, self.hidden_state_GRU = self.gru(self.input_GRU, (self.h_0_GRU))
+        _, self.h_out_gru = self.gru(self.input_GRU, (self.h_0_GRU))
 
+        # GMM model below, outputting the means, log_sigmas, correlation and log_probabilities
+        self.mus = self.fc_mus(self.h_out_gru)
+        self.log_prob = self.fc_log_prob(self.h_out_gru)
+        self.log_sigmas = self.fc_log_sigmas(self.h_out_gru)
+        self.corrs = self.fc_corrs(self.h_out_gru)
+
+        # Integrate outputs of the GMM model
+        
 
         self.y_pred = 0
         
