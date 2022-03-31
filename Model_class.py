@@ -137,7 +137,7 @@ class model(nn.Module):
                                           self.GRU_size)
 
 
-        self.gru = nn.GRU(input_size=hidden_history*hidden_interactions*K_q**N_q, 
+        self.gru = nn.GRU(input_size=self.input_size + self.hidden_history + self.hidden_interactions + self.K_q**self.N_q, 
                           hidden_size=self.GRU_size,
                           num_layers=1, 
                           batch_first=self.batch_first) 
@@ -233,15 +233,21 @@ class model(nn.Module):
         self.M_q_norm = self.normalize(self.M_q, self.N_q, self.K_q)
         self.M_p_norm = self.normalize(self.M_p, self.N_p, self.K_p)
 
-        self.z = self.one_hot_encode_M(self.M_q_norm)
+        # Sample the latent variable z_q
+        self.z_q = self.one_hot_encode_M(self.M_q_norm)
+        self.z_q = self.z_q.type(torch.FloatTensor).view(1,100,25)
 
-        print(self.z.shape)
+        # Create first hidden state for GRU layer
+        self.h_0_GRU = Variable(self.hidden_state_GRU(self.z_q))
+        self.input_GRU = torch.cat((self.z_q, self.e_x, x_i), dim=2)
+        
+        # Decode with GRU layer, outputting a tensor with 128 features
+        _, self.hidden_state_GRU = self.gru(self.input_GRU, (self.h_0_GRU))
 
-        self.h_0_GRU = self.hidden_state_GRU(self.z.long())
-
-        _, self.hidden_state_GRU = self.gru(self.z, self.hidden_state_GRU)
 
         self.y_pred = 0
+        
+        
         return self.y_pred, self.M_p_norm, self.M_q_norm
 
     
