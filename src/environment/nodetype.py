@@ -6,4 +6,4 @@ class NodeType(object):
     def __str__(self):
         return self.name
 
-pedestrian = NodeType(name='pedestrian', perception_range=5)
+pedestrian = NodeType(name='pedestrian', perception_range=100)

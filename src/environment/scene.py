@@ -1,30 +1,35 @@
 from typing import List, Optional
 
+import numpy as np
+import torch
+
 from src.data import CSVDataset
 from src.environment import Node, pedestrian
 
-
 class Scene(object):
-    def __init__(self, dataset) -> None:
+    def __init__(self,
+                 dataset,
+                 use_edge_nodes: bool = True,
+                 use_robot_node: bool = False,
+                 H: int = 30,
+                 F: int = 3,
+                 input_columns = None,
+                 output_columns = None,
+                 aggregation_operation: str = 'sum'
+    ) -> None:
         if not isinstance(dataset, CSVDataset):
             raise TypeError(f'{dataset} must be {CSVDataset} instance')
+        # data
         self._dataset = dataset
         self._nodes = []
-
-
-
-
-
-    # def __getitem__(self, key: str):
-    #     if key == "t":
-    #         return self.timestamps()
-    #     elif key == "id":
-    #         return self.ids()
-    #     else:
-    #         return self._dataset.data.__getitem__(key)
-
-
-
+        # hyperparameters
+        self.use_edge_nodes = use_edge_nodes
+        self.use_robot_node = use_robot_node
+        self.H = H
+        self.F = F
+        self.input_columns = input_columns or ['x', 'y', 'dx', 'dy']
+        self.output_columns = output_columns or ['x', 'y']
+        self.aggregation_operation = aggregation_operation
 
     @property
     def data(self):
@@ -42,8 +47,6 @@ class Scene(object):
     def ids(self):
         return self.data['id'].unique()
 
-
-
     def get_node(self, id: int) -> Node:
         for node in self._nodes:
             if node.id == id:
@@ -51,7 +54,7 @@ class Scene(object):
         raise NotImplementedError  # catchall
 
     def add_node(self, id: int) -> None:
-        mask = self.ids == id
+        mask = self.data['id'] == id
         node_data = self.data.loc[mask]
         node = Node(
             type=pedestrian,  # TODO: add dynamic type allocation
@@ -60,7 +63,7 @@ class Scene(object):
         )
         self._nodes.append(node)
 
-    def add_nodes(self, ids: Optional[List[int]]):
+    def add_nodes(self, ids: Optional[List[int]] = None):
         if ids is None:
             ids = self.ids
         for id in ids:
@@ -85,161 +88,142 @@ class Scene(object):
         node = self.get_node(id)
         node.is_robot = True
 
-
-
-
-
-
-
-
-
-    def get_neighbors(self, id: int, timestamp: int):
+    def get_neighbors(self, id: int, timestamp: int, include_node: bool = False):
         '''
-        
+
         Args:
-            id: node id for which we return the neighbors data
-            timestamp:  
+            id:
+            timestamp:
+            include_node:
         '''
-
         node = self.get_node(id)
-
         if not timestamp in node.timestamps:
             raise KeyError(f'{timestamp} not in {node.timestamps}')
 
-        data = self._dataset.filter(row_filters={
-            't': timestamp
-        })
+        data = self._dataset.filter(
+            columns=['id', 'x', 'y'],
+            row_filters={
+                't': [timestamp]
+            }
+        )
 
-        
         mask = data['id'] == id
-        # split dataset
-        node_data = data.loc[mask]
-        neighbors_data = data.loc[not mask]
+        # split dataframe
+        node_data = data[mask]
+        neighbors_data = data[~mask]
 
-        
+        relative_positions = neighbors_data.subtract(node_data.values) # distances between neighbors and node
+        straight_line_distances = np.linalg.norm(relative_positions, axis=1) # 2-norm
+        in_perception_range = straight_line_distances <= node.type.perception_range
+        # get neighbors ids for neighbors in perception range
+        neighbor_ids = neighbors_data['id'][in_perception_range].tolist()
+        # if specified, add node id to neighbours list
+        if include_node:
+            neighbor_ids.append(id)
+        # cast ids to int
+        return list(map(int, neighbor_ids))
 
-        print(node_data)
-        print(neighbors_data)
+    def get_batch(self, id: int, timestamp: int):
+        """ # TODO: clarify what states and output_states mean
+        Returns a batch for node {id} at time {timestamp}
 
-    # def get_neighbours(self, id: int, t: int, include_node_i: bool = False):
-    #     """
-    #     Returns an array with the neighbour nodes of node_i wihtin the perception range at time t
-    #     Parameters
-    #     ----------
-    #     Args:
-    #         id : node id.
-    #         timestamp : timestamp.
-    #     Returns
-    #     -------
-    #     neighbours : array with neighbour nodes
-    #     """
+        batch : [x_i:           H x len(input_columns)
+                 x_i_fut:       F x len(input_columns)
+                 y_i:           F x output_states
+                 x_R:           H x states
+                 x_neighbours:  H x len(input_columns) (aggregated)]
+        """
+        history_timestamps = np.arange(timestamp - self.H + 1, timestamp)
+        future_timestamps = np.arange(timestamp, timestamp + self.F)
 
-    #     df_node_i = self.filter_data(id=id, t = t)
-    #     df_nodes  = self.filter_data(t = t)
+        x_R = []
+        if self.use_robot_node:
+            raise NotImplementedError
 
-    #     if (len(df_node_i)==0 or len(df_nodes)==0):
-    #         print('No data available for given t (and node id)')
-    #         neighbours = np.array([])
-    #     else:      
-    #         pos_node_i = np.array([df_node_i['x'].values * np.ones(len(df_nodes)), 
-    #                                df_node_i['y'].values * np.ones(len(df_nodes))])
-    #         pos_nodes  = np.array([df_nodes['x'], df_nodes['y']])
-    #         distances  = np.linalg.norm(pos_nodes - pos_node_i, axis = 0)
-    #         perception_logic = (distances <= self.attention_radius)
-    #         not_node_i = (distances != 0) 
-    #         if include_node_i:
-    #             not_node_i = True
-    #         neighbours = df_nodes['id'][not_node_i * perception_logic].values 
+        x_neighbors = []
+        if self.use_edge_nodes:
+            neighbor_ids = self.get_neighbors(id, timestamp)
+            for neighbor_id in neighbor_ids:
+                # TODO normalize neighbour data (relative state + standardize)
+                x_neighbor = self._dataset.filter(
+                    columns=self.input_columns,
+                    row_filters={
+                        't': history_timestamps,
+                        'id': [neighbor_id]
+                    }
+                )
+                if len(x_neighbor) == self.H+1:
+                    x_neighbors.append(x_neighbor)
+                    # Note that now we only take into account the neighbors which
+                    # are in the perception range of the node during the whole time window.
+                    # This does not necessarily have to be the case
 
-    #     return neighbours
+            x_neighbors = np.array(x_neighbors).reshape((-1, self.H+1, len(self.input_columns)))
 
-    # def get_batch(self, id, t):
-    #     """
-    #     Return batch for node i and time t
+            if self.aggregation_operation == 'sum':
+                x_neighbors = np.sum(x_neighbors, axis=0)
+            else:
+                raise NotImplementedError
 
-    #     Parameters
-    #     ------
-    #     id
-    #     t
-    #     Returns
-    #     -------
-    #     batch : [x_i:           seq_H x input_states
-    #              x_neighbours:  seq_H x input_states (aggregated)
-    #              x_R:           seq_H x states
-    #              x_i_fut:       seq_F x input_states
+        x_i = self._dataset.filter(
+            columns=self.input_columns,
+            row_filters={
+                't': history_timestamps,
+                'id': [id]
+            }
+        )
 
-    #              y_i:           seq_F x output_states]
-    #     """
-    #     x_R = []
-    #     x_neighbours = []
+        x_i_fut = self._dataset.filter(
+            columns=self.input_columns,
+            row_filters={
+                't': future_timestamps,
+                'id': [id]
+            }
+        )
 
-    #     if self.use_robot_node:
-    #         raise NotImplementedError
-    #         x_R = []
+        y_i = self._dataset.filter(
+            columns=self.output_columns,
+            row_filters={
+                't': future_timestamps,
+                'id': [id]
+            }
+        )
 
-    #     if self.use_edge_nodes:
-    #         neighbours = self.get_neighbours(id = id, t = t)
-    #         x_neighbours = []
-    #         for neighbour in neighbours:
-    #             #TODO normalize neighbour data (relative state + standardize)
-    #             x_neighbour = self.time_window(t-(self.H+1), t, self.input_cols, id=neighbour)
-    #             if len(x_neighbour)==self.H+1: #TODO: right now we only take into account neighbours with enoug data, but this does not have to be the case
-    #                 x_neighbours.append(x_neighbour)
+        return x_i, x_i_fut, y_i, x_R, x_neighbors
 
-    #         x_neighbours = np.array(x_neighbours).reshape((-1, self.H+1, self.input_states)) 
+    def get_batches(self):
+        """
+        Iterates over all nodes and timestamps and returns batch data of scene
+        -------
+        X_i : history of node i:                     seq_H+1 x N x input states.
+        X_i_fut : future of node i:                  seq_F   x N x input states
+        Y_i : label for node i:                      seq_F   x N x output states
+        X_neighbours : Aggregated neighbour data:    seq_H+1 x N x input states
+        """
 
-    #         if self.aggregation_operation == 'sum':
-    #             x_neighbours = np.sum(x_neighbours, axis=0)
-    #         else:
-    #             raise NotImplementedError
+        X_i         = torch.zeros((self.H+1, 1, len(self.input_columns)))
+        X_i_fut     = torch.zeros((self.F, 1, len(self.input_columns)))
+        Y_i         = torch.zeros((self.F, 1, len(self.output_columns)))
+        X_neighbours= torch.zeros((self.H+1, 1, len(self.input_columns)))
 
-    #     x_i = self.time_window(t-(self.H+1), t, self.input_cols, id=id)
-    #     x_i_fut = self.time_window(t, t+self.F, self.input_cols, id=id)
-    #     y_i = self.time_window(t, t+self.F, self.output_cols, id=id)
+        for id in self.ids:
+            node = self.get_node(id)
+            node_timestamps = node.timestamps
+            # t_range = self.filter_data(id = id)['t'].values
+            # for t in t_range:
+            for timestamp in node_timestamps:
+                x_i, x_i_fut, y_i, x_R, x_neighbours = self.get_batch(id, timestamp) #TODO: make variable for if we use robot or not
+                if (len(x_i)==len(x_neighbours)== self.H+1 and len(x_i_fut)==len(y_i)==self.F): # only store data if sequence long enough
 
-    #     return x_i, x_i_fut, y_i, x_R, x_neighbours
+                    # convert to pytorch tensor and reshape:
+                    x_i          = torch.tensor(x_i).reshape((self.H+1, 1, len(self.input_columns)))
+                    x_neighbours = torch.tensor(x_neighbours).reshape((self.H+1, 1, len(self.input_columns)))
+                    y_i          = torch.tensor(y_i).reshape((self.F, 1, len(self.output_columns)))
+                    x_i_fut      = torch.tensor(x_i_fut).reshape((self.F, 1, len(self.input_columns)))
 
-    # def get_batches(self):
-    #     """
-    #     Iterate over all nodes and times and return batch data of scene
-    #     Returns
-    #     -------
-    #     X_i : history of node i:                     seq_H+1 x N x input states.
-    #     X_i_fut : future of node i:                  seq_F   x N x input states
-    #     Y_i : label for node i:                      seq_F   x N x output states
-    #     X_neighbours : Aggregated neighbour data:    seq_H+1 x N x input states
-    #     """
+                    X_i          = torch.cat((X_i, x_i), dim=1)
+                    X_i_fut      = torch.cat((X_i_fut, x_i_fut), dim=1)
+                    Y_i          = torch.cat((Y_i, y_i), dim=1)
+                    X_neighbours = torch.cat((X_neighbours, x_neighbours), dim=1)
 
-    #     X_i         = torch.zeros((self.H+1, 1, self.input_states))
-    #     X_i_fut     = torch.zeros((self.F, 1, self.input_states))
-    #     Y_i         = torch.zeros((self.F, 1, self.output_states))
-    #     X_neighbours= torch.zeros((self.H+1, 1, self.input_states))
-
-    #     for id in self.ids:
-    #         t_range = self.filter_data(id = id)['t'].values
-    #         for t in t_range:
-    #             x_i, x_i_fut, y_i, x_R, x_neighbours = self.get_batch(id, t) #TODO: make variable for if we use robot or not
-    #             if (len(x_i)==len(x_neighbours)== self.H+1 and len(x_i_fut)==len(y_i)==self.F): # only store data if sequence long enough
-
-    #                 ### convert to pytorch tensor and reshape:
-    #                 x_i          = torch.tensor(x_i).reshape((self.H+1, 1, self.input_states))
-    #                 x_neighbours = torch.tensor(x_neighbours).reshape((self.H+1, 1, self.input_states))
-    #                 y_i          = torch.tensor(y_i).reshape((self.F, 1, self.output_states))
-    #                 x_i_fut      = torch.tensor(x_i_fut).reshape((self.F, 1, self.input_states))     
-
-    #                 X_i         = torch.cat((X_i, x_i), dim=1)
-    #                 X_i_fut     = torch.cat((X_i_fut, x_i_fut), dim=1)
-    #                 Y_i         = torch.cat((Y_i, y_i), dim=1)
-    #                 X_neighbours= torch.cat((X_neighbours, x_neighbours), dim=1)
-
-    #     return X_i, X_i_fut, Y_i, X_neighbours
-
-
-path = r'trajectron-reproduction\data\pedestrians\eth\train\biwi_hotel_train.csv'
-dataset = CSVDataset(path)
-dataset.load(header=0)
-dataset.validate()
-scene = Scene(dataset)
-scene.add_nodes()
-
-scene.get_neighbors(timestamp=100)
+        return X_i, X_i_fut, Y_i, X_neighbours

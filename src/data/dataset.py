@@ -100,9 +100,9 @@ class CSVDataset(Dataset):
             if not col in self.header:
                 raise NotImplementedError # TODO: add appropriate exception
 
-    def filter(self, row_filters: Optional[Dict[str, Any]] = None, columns: Optional[List[str]] = None) -> pd.DataFrame:        
-        '''
-        
+    def filter(self, row_filters: Optional[Dict[str, List[Any]]] = None, columns: Optional[List[str]] = None) -> pd.DataFrame:
+        ''' TODO: perhaps remove row_filters dict parameter, and work with **kwargs instead
+
 
         Args:
             row_filters: 
@@ -113,23 +113,19 @@ class CSVDataset(Dataset):
         '''
         if not columns:
             columns = self.header  # select all valid columns
-        
+
         if not row_filters:
             return self.data[columns]
-    
+
         masks = []
         # create boolean mask per row filter
         for key, value in row_filters.items():
-            if not key in columns:
+            if not key in self.header:
                 raise KeyError(f'{key} not in {columns}')
             else:
                 masks.append(self.data[key].isin(value))
-        
-        rows = [all(tup) for tup in zip(*masks)] # combine masks 
-        return self.data[rows, columns]
-
-
-
+        rows = [all(tup) for tup in zip(*masks)] # combine masks
+        return self.data.loc[rows, columns]
 
 
     # def pop(self, item: str, transpose: bool = False, copy: bool = False) -> pd.Series:
