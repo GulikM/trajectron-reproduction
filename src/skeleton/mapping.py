@@ -44,6 +44,13 @@ class ModuleMapping:
                 return super().__getattribute__(resource_name)[item]
         return super().__getattribute__(item)
 
+    def process_str(self, formula: str):
+        split_str = re.split('\b', formula)
+        split_str = re.sub(' *', '', split_str)
+        split_str = [[elem] if not re.match('^[^a-zA-Z]*$', elem) else [i for i in elem] for elem in split_str]
+        split_str = [k for elem in split_str for k in elem]
+        split_str = [config.defaults[elem] for elem in split_str if elem in self.params]
+
     def activate(self, tensor: tc.Tensor, activation: Union[str, dict], **kwargs):
         if isinstance(activation, dict):
             return self.activate(tensor, activation["name"] or "sigmoid", **(activation["params"] or dict()))
