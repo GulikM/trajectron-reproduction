@@ -186,8 +186,8 @@ class model(nn.Module):
     Below a integrate function that needs to be used after producting the distributions according to the GMM
     The output should be the predicted future???
     """
-    def integrate(self, x):
-        pass
+    def integrate(self, x, dx, dt):
+        return x + dx*dt
 
     """
     Sample function that produces latent variable z based on matrix M_p, using N and K (not mu and variance)
@@ -268,7 +268,7 @@ class model(nn.Module):
         self.corrs = self.fc_corrs(self.h_out_gru)
 
         # Integrate outputs of the GMM model
-        
+
 
         self.y_pred = 0
         
