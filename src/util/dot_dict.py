@@ -5,7 +5,7 @@ import typing
 from typing import Any
 import keyword
 from collections import defaultdict
-from src.util.module_wrapper import *
+from src.util.module import *
 
 
 class DotDict(defaultdict):
@@ -66,6 +66,15 @@ class DotDict(defaultdict):
         if isinstance(result, dict) and not isinstance(result, DotDict):
             self.__setattr__(key, DotDict(result))
         return defaultdict.__getitem__(self, key)
+
+    def items(self):
+        result = super().items()
+        return [(k, v if not isinstance(v, dict) else DotDict(v)) for k, v in result]
+
+    def values(self):
+        print("I was called!")
+        result = super().values()
+        return [v if not isinstance(v, dict) else DotDict(v) for v in result]
 
     @classmethod
     def is_reserved_member(cls, word: str) -> bool:

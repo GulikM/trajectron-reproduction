@@ -54,5 +54,19 @@ class ModuleWrapper:
         self.parents = parents if isinstance(parents, list) or not parents else [parents]
         self.nested = nested_classes(source, parents)
         for name, cls in self.nested:
-            setattr(ModuleWrapper, name, staticmethod(generate(cls)))
+            setattr(ModuleWrapper, name.lower(), staticmethod(generate(cls)))
+
+    def __getitem__(self, item):
+        return self.__getattribute__(item)
+
+    def __iter__(self):
+        return {k.lower(): self[k.lower()] for k, _ in self.nested}.__iter__()
     pass
+
+
+def obtain_module(name: str):
+    head, *name_list = name.split('.')
+    result = inspect.stack()[1][0].f_globals[head]
+    for nested_elem in name_list:
+        result = getattr(result, nested_elem)
+    return result

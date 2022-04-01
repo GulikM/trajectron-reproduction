@@ -4,15 +4,21 @@ const:
   - &size_H 5
 
 components:
-  - lstm_32:
-    - input_dim: [*size_H, 1, *size_D]
-    - output_dim: []
-  - lstm_8:
-    - input_dim: None
-    - output_dim: None
-  - attn:
-    - input_dim: None
-    - output_dim: None
+  history:
+    class_name: tc.nn.LSTM
+    params:
+      input_size: 100
+      hidden_size: 5
+    output: x_g
+  interactions:
+    class_name: tc.nn.LSTM
+    params:
+      input_size: 12
+      hidden_size: 6
+    inputs:
+      - x_t
+      - y_t
+    output: x_f
 
 mapping:
   - [lstm_32, lstm_8]

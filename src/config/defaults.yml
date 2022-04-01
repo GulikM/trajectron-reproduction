@@ -1,0 +1,7 @@
+F: 3
+H: 30
+batch_first: True
+K_p: 25
+N_p: 1
+K_q: 25
+N_q: 1

@@ -3,12 +3,14 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from load import CSVDataset
+from functools import partial
 
 # from itertools import product
 
 # DELTA_TIMESTAMP = 0.1 # 10 milllis in between frames 
 
-path = Path(r'.\trajectron-reproduction\data\pedestrians\eth\train\biwi_hotel_train.txt') # data source
+path = Path(r'.\data\pedestrians\eth\train\biwi_hotel_train.txt') # data source
 
 # colnames = ['t', 'id', 'x', 'y'] # headers
 
@@ -169,16 +171,22 @@ class Scene(object):
             if node.id == id:
                 return node
 
-    def add_node_from_dataset(self, ids: Optional[List[int]] = None):
+    def add_node_from_dataset(self, ids: Optional[Union[List[int], int]] = None):
         ''' 
         '''
         if ids is None:
             ids = self.ids
+        if isinstance(ids, int):
+            ids = [ids]
+        print(self.data.head())
+        candidate_nodes = self.data.loc[ids]
+        # TODO: figure out pandas mapping
         for id in ids:
+            print(self.data.loc[id])
             mask = self.ids == id
             node_data = self.data.loc[mask]
             node = Node(
-                type=None, # TODO: add dynamic type allocation
+                type=None,  # TODO: add dynamic type allocation
                 id=id,
                 data=node_data,
             )
@@ -367,7 +375,7 @@ class Scene(object):
 
 
 
-path = r'trajectron-reproduction\data\pedestrians\eth\train\biwi_hotel_train.csv'
+path = r'pedestrians\eth\train\biwi_hotel_train.csv'
 dataset = CSVDataset(path)
 dataset.load(header=0)
 dataset.validate()

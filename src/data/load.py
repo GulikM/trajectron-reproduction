@@ -1,9 +1,13 @@
 import inspect
+import os
+
 import pandas as pd
 
 from pathlib import Path
 from typing import Union
 from src.util import Validated
+
+MAX_WALK = 3
 
 
 class Dataset(Validated):
@@ -21,11 +25,27 @@ class Dataset(Validated):
     def path(self, path: Union[str, Path]):
         if not isinstance(path, Path):
             path = Path(path)
-        if not path.exists():
-            raise NotImplementedError  # TODO: raise appropriate exception
-        elif not path.is_file():
-            raise FileNotFoundError(f"No such file: '{path}'")
-        self._path = path
+
+        if not path.suffix:     # when attempting to target a folder instead of a file, raise ValueError
+            raise ValueError(f"path {path} is a directory, not a file. Please provide a file instead.")
+
+        if path.exists():       # straight-forward existence match
+            self._path = path
+            return
+
+        # when not directly found, we crawl up to MAX_WALK directories up to find the folder
+        path_folder, filename = path.parent, path.name
+        curr_dir = Path(os.getcwd())
+        parents = list(curr_dir.parents)
+
+        for cd_parent in parents[:MAX_WALK]:    # sliced set of parents: only the levels we wish to consider
+            for root, _, files in os.walk(cd_parent):
+                if root.endswith(str(path_folder)) and filename in files:
+                    self._path = Path(os.path.join(root, filename))
+                    return
+
+        # if we reach here, we have found no file
+        raise FileNotFoundError(f"No such file: '{path}'")
     
     @property
     def name(self):
@@ -38,7 +58,7 @@ class Dataset(Validated):
     def load(self, overwrite_params=False, **kwargs) -> None:
         # keep track of passed parameters to enable reloading of the dataset
         if not overwrite_params:
-            self.params = {**(self.load_args or dict()), **kwargs}
+            self.params = {**(self.params or dict()), **kwargs}
         else:
             self.params = kwargs
 
@@ -69,6 +89,7 @@ class CSVDataset(Dataset):
             for chunk in pd.read_csv(self._path, **kwargs, chunksize=chunksize):
                 chunks.append(chunk)
             self._data = pd.concat(chunks)
+        self._data.drop_duplicates(subset=['id'])
 
     @property
     def header(self):

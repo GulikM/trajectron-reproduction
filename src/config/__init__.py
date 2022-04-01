@@ -35,6 +35,13 @@ def omit(*names):
     return _parser.omit(*names)
 
 
+def assign(dd: DotDict, name: str = None):
+    def assign_decorator(func):
+        dd[name or func.__name__] = func
+        return func
+    return assign_decorator
+
+
 banned_items = inspect.getmembers(sys.modules[__name__], predicate=inspect.isfunction)
 
 
