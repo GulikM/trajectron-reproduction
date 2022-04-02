@@ -18,6 +18,9 @@ from sklearn.model_selection import train_test_split
 from tqdm import tqdm, tqdm_notebook
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
+import random
+
+
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -67,6 +70,7 @@ class model(nn.Module):
         self.K_q = K_q
         self.N_q = N_q
         self.GRU_size = GRU_size
+        self.dt = 1
 
         # GMM model parameters
         self.mus_size = 2
@@ -142,8 +146,15 @@ class model(nn.Module):
         self.hidden_state_GRU = nn.Linear(self.K_q**self.N_q,
                                           self.GRU_size)
 
+        self.h_gru_good = nn.Linear(self.K_q**self.N_q*25,
+                                    self.GRU_size)
 
         self.gru = nn.GRU(input_size=self.input_size + self.hidden_history + self.hidden_interactions + self.K_q**self.N_q, 
+                          hidden_size=self.GRU_size,
+                          num_layers=1, 
+                          batch_first=self.batch_first) 
+        
+        self.gru_good = nn.GRU(input_size=self.input_size + self.hidden_history + self.hidden_interactions + self.K_q**self.N_q, 
                           hidden_size=self.GRU_size,
                           num_layers=1, 
                           batch_first=self.batch_first) 
@@ -191,6 +202,22 @@ class model(nn.Module):
 
     def integrate_sigma(self, sigma, dsigma, dt):
         return sigma + dsigma*dt**2
+
+
+    def one_hot_motion_primitives(self, k: int):
+        motion_primitives = torch.zeros(k, k)
+        for i in range(k):
+            motion_primitives[i,i] = 1
+        return motion_primitives
+
+    def prob_one_hot(self, prob_tensor, n_samples: int = 25):
+        length = len(prob_tensor)
+        samples = []
+        for i in range(length):
+            samples.append(random.choices(self.one_hot_motion_primitives(25).tolist(), 
+                                          weights=prob_tensor[i][0]/np.sum(prob_tensor[i][0]), 
+                                          k=n_samples))
+        return samples
 
     """
     Sample function that produces latent variable z based on matrix M_p, using N and K (not mu and variance)
@@ -254,28 +281,44 @@ class model(nn.Module):
         self.M_p_norm = self.normalize(self.M_p, self.N_p, self.K_p)
 
         # Sample the latent variable z_q
-        self.z_q = self.one_hot_encode_M(self.M_q_norm)
-        self.z_q = self.z_q.type(torch.FloatTensor).view(1,100,25)
+        #self.z_q = self.one_hot_encode_M(self.M_q_norm)
+        #self.z_q = self.z_q.type(torch.FloatTensor).view(1,100,25)
+
+        self.z_q_good = torch.FloatTensor(self.prob_one_hot(self.M_q_norm.tolist(), 25)).view(1, 100,25*25)
 
         # Create first hidden state for GRU layer
-        self.h_0_GRU = Variable(self.hidden_state_GRU(self.z_q))
-        self.input_GRU = torch.cat((self.z_q, self.e_x, x_i), dim=2)
+        #self.h_0_GRU = Variable(self.hidden_state_GRU(self.z_q))
+        #self.input_GRU = torch.cat((self.z_q, self.e_x, x_i), dim=2)
+
+        self.h_0_GRU_good = Variable(self.h_gru_good(self.z_q_good))
+        
         
         # Decode with GRU layer, outputting a tensor with 128 features
-        _, self.h_out_gru = self.gru(self.input_GRU, (self.h_0_GRU))
+        #_, self.h_out_gru = self.gru(self.input_GRU, (self.h_0_GRU))
 
-        # GMM model below, outputting the means, log_sigmas, correlation and log_probabilities
-        self.mus = self.fc_mus(self.h_out_gru)
-        self.log_prob = self.fc_log_prob(self.h_out_gru)
-        self.log_sigmas = self.fc_log_sigmas(self.h_out_gru)
-        self.corrs = self.fc_corrs(self.h_out_gru)
+        self.y_preds = []
 
-        # Integrate outputs of the GMM model
-        print(self.mus.shape)
-        print(self.log_sigmas.shape)
-        self.y_pred = 0
-        
-        return self.y_pred, self.M_p_norm, self.M_q_norm
+        for i in range(25):
+            self.input_GRU_good = torch.cat((self.z_q_good[:,:,25*i:25*(i+1)], self.e_x, x_i), dim=2)
+            _, self.h_out_gru = self.gru_good(self.input_GRU_good, (self.h_0_GRU_good))
+
+            # GMM model below, outputting the means, log_sigmas, correlation and log_probabilities
+            self.mus = self.fc_mus(self.h_out_gru)
+            self.log_prob = self.fc_log_prob(self.h_out_gru)
+            self.log_sigmas = self.fc_log_sigmas(self.h_out_gru)
+            self.corrs = self.fc_corrs(self.h_out_gru)
+
+            
+            # Integrate outputs of the GMM model
+            self.mus_pos = self.integrate_mu(x_i, self.mus, self.dt)
+            self.sigmas_pos = self.integrate_sigma(torch.zeros(1, 100, 2), torch.exp(self.log_sigmas), self.dt)
+
+            self.y_pred = torch.cat((self.log_prob, self.mus_pos, self.sigmas_pos, self.corrs), dim=2)
+            self.y_preds.append(self.y_pred)
+
+        self.y_preds = torch.stack(self.y_preds)
+
+        return self.y_preds, self.M_p_norm, self.M_q_norm
 
 def loss_function(M_qs, M_ps, y_true, y_pred, beta = 1, alfa =1  ):
     """
@@ -299,11 +342,11 @@ def loss_function(M_qs, M_ps, y_true, y_pred, beta = 1, alfa =1  ):
 
     """
     # Load parameters locally: #TODO load from self.parameter when in class
-    B = 1000
+    B = 100
     N = 1
     M = 1
     K = 25
-    F = 3
+    F = 1
     alfa = 1
     beta = 1
     
@@ -346,7 +389,7 @@ def loss_function(M_qs, M_ps, y_true, y_pred, beta = 1, alfa =1  ):
     p_i = Q # size = B x N x K. We need size = B x 1 x N^K (for multiplication with prob), so valid for N=1
   
     prob = biv_N_pdf(x, y, mu_x, mu_y, sig_x, sig_y, rho) # size = B x F x K^N X M
-    prob = torch.squeeze(prob, 3) # squeeze matrix, as M = 1 for now, so we skip the weighing
+    prob = torch.squeeze(torch.tensor(prob), 3) # squeeze matrix, as M = 1 for now, so we skip the weighing
     prob = torch.clamp(prob, min = 1e-5) # probability cannot be 0; otherwhise loss will be inf
     assert(prob.shape == (B, F, K**N))
     
@@ -361,11 +404,16 @@ def loss_function(M_qs, M_ps, y_true, y_pred, beta = 1, alfa =1  ):
 
 def biv_N_pdf(x, y, mu_x, mu_y, sig_x, sig_y, rho):
     # make sure parameters stay wihtin range:
-    sig_x = torch.clamp(sig_x, min = 1e-5)
-    sig_y = torch.clamp(sig_y, min = 1e-5)
-    rho   = torch.clamp(rho, min = 1-1e-5, max = 1-1e-5)
+    sig_x = torch.clamp(sig_x, min = 1e-5).detach().numpy()
+    sig_y = torch.clamp(sig_y, min = 1e-5).detach().numpy()
+    rho   = torch.clamp(rho, min = 1-1e-5, max = 1-1e-5).detach().numpy()
+    mu_x = mu_x.detach().numpy()
+    mu_y = mu_y.detach().numpy()
+    y = y.detach().numpy()
+    x = x.detach().numpy()
+
     
-    f = 1/(2*np.pi*sig_x*sig_y*np.sqrt(1-rho**2)) * torch.exp(-1/(2*(1-rho**2)) * \
+    f = 1/(2*np.pi*sig_x*sig_y*np.sqrt(1-rho**2)) * np.exp(-1/(2*(1-rho**2)) * \
          (((x-mu_x)/sig_x)**2 + ((y-mu_y)/sig_y)**2 \
         -2*rho*(x-mu_x)*(y-mu_y)/(sig_x*sig_y)))                                            
     return f
@@ -382,4 +430,8 @@ x_i_fut = torch.rand(1, 100, 2)
 y_i = torch.rand(1, 100, 2)
 
 # do forward function
-net(x_i, x_neighbour, x_i_fut, y_i)
+y_true = y_i
+y_pred, M_p_norm, M_q_norm = net(x_i, x_neighbour, x_i_fut, y_i)
+
+print("loss = ", loss_function(M_q_norm, M_p_norm, y_true.view(100,1,2), y_pred.view(100,1,25,1,6)))
+
