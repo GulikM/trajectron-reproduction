@@ -4,8 +4,7 @@ from torch import nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 import random
-from preprocessing import get_batches
-from preprocessing import import_ped_data
+import preprocessing
 
 # Use gpu if available
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
