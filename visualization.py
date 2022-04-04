@@ -14,11 +14,10 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import random
+from pathlib import Path
 
-
-
-# inpath = pathlib.Path('C:/Users/maart/Documents/GitHub/Trajectron-reproduction/data/pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
-# df = import_ped_data(inpath)
+path = Path('data/pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
+df = import_ped_data(path)
 
 def evaluate(scene, model):
     
@@ -29,8 +28,8 @@ def evaluate(scene, model):
     Y_pred = model(X)
     
     DE = abs(Y_true - Y_pred)# displacement error (l2 distance) #TODO: fix l2 distance
-    ADE = # average displacement error
-    FDE = # final displacement error
+    ADE = 0# average displacement error
+    FDE = 0# final displacement error
     
     return ADE, FDE
 
@@ -138,14 +137,14 @@ def evaluate_model(model, scene, node, t_min=1, t_max = None):
 #         y = df_i['y'].values + noise
 #         plot_pred = plt.plot(x,y, 'r--', label = 'pred')
         
-# def plot_node(df, i):
-#     plt.figure()
-#     plt.ylabel('y (m)')
-#     plt.xlabel('x (m)')
-#     df_i = df.loc[df['id'] == int(i)]
-#     plt.plot(df_i['x'],df_i['y'])
+def plot_node(df, i):
+    plt.figure()
+    plt.ylabel('y (m)')
+    plt.xlabel('x (m)')
+    df_i = df.loc[df['id'] == int(i)]
+    plt.plot(df_i['x'],df_i['y'])
     
 
-# plot_node(df, 11)
-# plot_traj(df, df, 0, 40)
+plot_node(df, 11)
+plot_traj(df, df, 0, 40)
 
