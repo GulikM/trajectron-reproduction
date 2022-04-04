@@ -4,6 +4,8 @@ from torch import nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 import random
+from preprocessing import get_batches
+from preprocessing import import_ped_data
 
 # Use gpu if available
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -24,8 +26,8 @@ batch_size = 200
 
 # Model variables
 input_size = 2
-History = 3
-Future = 3
+History = 1
+Future = 1
 num_classes = 2
 K_p = 25
 N_p = 1
@@ -99,7 +101,7 @@ class model(nn.Module):
         # Use linear layer once to initialize the first long term and short term states
 
         self.hidden_states_fut = nn.Linear(self.input_size, 
-                                           2*2*self.hidden_future) # 2 times since hidden_future size since long term and short term memory need to be initialized
+                                           self.input_size*2*self.hidden_future) # 2 times since hidden_future size since long term and short term memory need to be initialized
                                                                  # also 2 times for the bidirectional part
 
 
@@ -240,7 +242,7 @@ class model(nn.Module):
         if self.batch_first:
             self.fut_states = self.hidden_states_fut(x_i_fut).view(self.input_size, self.batch_size, 2*self.hidden_future)
         else:
-            self.fut_states = self.hidden_states_fut(x_i_fut).view(self.input_size,self.batch_size, 2*self.hidden_future)
+            self.fut_states = self.hidden_states_fut(x_i_fut).view(self.input_size, self.batch_size, 2*self.hidden_future)
 
         self.h_0_future = self.fut_states[:,:,0 :self.hidden_future]
         self.c_0_future = self.fut_states[:,:,self.hidden_future::]
@@ -418,15 +420,15 @@ net = model(input_size, History, Future, hidden_history, hidden_interactions, hi
 
 # some random data that is NOT batch first (timestep, batchsize, states)
 if batch_first:
-    x_i = torch.rand(batch_size, 1, 2)
-    x_neighbour = torch.rand(batch_size, 1, 2)
-    x_i_fut = torch.rand(batch_size, 1, 2)
-    y_i = torch.rand(batch_size, 2)
+    x_i = torch.rand(batch_size, 1, input_size)
+    x_neighbour = torch.rand(batch_size, 1, input_size)
+    x_i_fut = torch.rand(batch_size, 1, input_size)
+    y_i = torch.rand(batch_size, input_size)
 else:
-    x_i = torch.rand(1, batch_size, 2)
-    x_neighbour = torch.rand(1, batch_size, 2)
-    x_i_fut = torch.rand(1, batch_size, 2)
-    y_i = torch.rand(1, batch_size, 2)
+    x_i = torch.rand(1, batch_size, input_size)
+    x_neighbour = torch.rand(1, batch_size, input_size)
+    x_i_fut = torch.rand(1, batch_size, input_size)
+    y_i = torch.rand(1, batch_size, input_size)
 
 # do forward function
 y_true = y_i
