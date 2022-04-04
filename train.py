@@ -31,7 +31,7 @@ from sklearn.decomposition import PCA
 
 
 def train(scene, model, optimizer, 
-          SEED = 42 
+          SEED = 42,
           DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
           num_epochs = 100,
           learning_rate = 0.01):
