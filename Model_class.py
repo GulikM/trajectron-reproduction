@@ -1,42 +1,29 @@
-from unicodedata import bidirectional
-from matplotlib import pyplot as plt
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox, TextArea
-import matplotlib
 import numpy as np
-import pandas as pd
 import torch
-import torchvision
 from torch import nn
 from torch.autograd import Variable
-from torch.utils.data import DataLoader
-from torch.utils import data
 import torch.nn.functional as F
-from torchvision import transforms
-from torchvision.datasets import MNIST
-from torchvision.utils import save_image
-from sklearn.model_selection import train_test_split
-from tqdm import tqdm, tqdm_notebook
-from sklearn.manifold import TSNE
-from sklearn.decomposition import PCA
 import random
 
-
-
+# Use gpu if available
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 print('Training on',DEVICE)
+
+# Randomseed
 SEED = 42
 np.random.seed(SEED)
 torch.manual_seed(SEED)
 torch.cuda.manual_seed(SEED)
 torch.backends.cudnn.deterministic = True
 
+# Train variables
 num_epochs = 1000
 learning_rate = 0.01
+batch_size = 200
 
+# Model variables
 input_size = 2
-hidden_size = 32
-num_layers = 1
 History = 3
 Future = 3
 num_classes = 2
@@ -44,17 +31,17 @@ K_p = 25
 N_p = 1
 K_q = 25
 N_q = 1
-
+num_samples = 25
 hidden_history = 32
 hidden_interactions = 8
 hidden_future = 32
+GRU_size = 128
 
 batch_first = False
 
-GRU_size = 128
 
 class model(nn.Module):
-    def __init__(self, input_size, H, F, hidden_history, hidden_interactions, hidden_future, GRU_size, batch_first, K_p, N_p, K_q, N_q):
+    def __init__(self, input_size, H, F, hidden_history, hidden_interactions, hidden_future, GRU_size, batch_first,  batch_size, K_p, N_p, K_q, N_q, num_samples):
         super(model, self).__init__()
 
         # initialize parameters for the different layers
@@ -65,12 +52,14 @@ class model(nn.Module):
         self.hidden_interactions = hidden_interactions
         self.hidden_future = hidden_future
         self.batch_first = batch_first
+        self.batch_size = batch_size
         self.K_p = K_p
         self.N_p = N_p
         self.K_q = K_q
         self.N_q = N_q
         self.GRU_size = GRU_size
         self.dt = 1
+        self.num_samples = num_samples
 
         # GMM model parameters
         self.mus_size = 2
@@ -181,8 +170,7 @@ class model(nn.Module):
     Below a normalize function that needs to be used after producting the distribution matrices M_p and M_q
     """
     def normalize(self, M_flat, N, K):
-        batch_size = 100
-        M = M_flat.view(batch_size, N, K)
+        M = M_flat.view(self.batch_size, N, K)
         M_exp = torch.exp(M)
         if self.batch_first == False:
             row_sums = M_exp.sum(axis=0)
@@ -214,38 +202,34 @@ class model(nn.Module):
         length = len(prob_tensor)
         samples = []
         for i in range(length):
-            samples.append(random.choices(self.one_hot_motion_primitives(25).tolist(), 
+            samples.append(random.choices(self.one_hot_motion_primitives(n_samples).tolist(), 
                                           weights=prob_tensor[i][0]/np.sum(prob_tensor[i][0]), 
                                           k=n_samples))
         return samples
 
-    """
-    Sample function that produces latent variable z based on matrix M_p, using N and K (not mu and variance)
-    """    
-    def one_hot_encode_M(self, M):
-        if self.batch_first == True:
-            idx = torch.argmax(M, dim=2)
-        else:
-            idx = torch.argmax(M, dim=2)
-        
-        M_one_hot = F.one_hot(idx, 25)
-        return M_one_hot
-    
+
     # This is the function that implements all the layers with functions in between for TRAINING
     def forward(self ,x_i, x_neighbour, x_i_fut, y_i):
 
         # Initialize first hidden short and long term states for history lstm
-        self.h_0_history = Variable(torch.zeros(1, x_i.size(dim=1), self.hidden_history))
-        self.c_0_history = Variable(torch.zeros(1, x_i.size(dim=1), self.hidden_history))
-        
+        if self.batch_first:
+            self.h_0_history = Variable(torch.zeros(1, x_i.size(dim=0), self.hidden_history))
+            self.c_0_history = Variable(torch.zeros(1, x_i.size(dim=0), self.hidden_history))
+        else:
+            self.h_0_history = Variable(torch.zeros(1, x_i.size(dim=1), self.hidden_history))
+            self.c_0_history = Variable(torch.zeros(1, x_i.size(dim=1), self.hidden_history))
         # History forward:
         _, (self.history_h_out, c_out) = self.history(x_i, (self.h_0_history, self.c_0_history))
         
 
 
         # Initialize first hidden short and long term states for interactions lstm   
-        self.h_0_interactions = Variable(torch.zeros(1, x_i.size(dim=1), self.hidden_interactions))
-        self.c_0_interactions = Variable(torch.zeros(1, x_i.size(dim=1), self.hidden_interactions))
+        if self.batch_first:
+            self.h_0_interactions = Variable(torch.zeros(1, x_i.size(dim=0), self.hidden_interactions))
+            self.c_0_interactions = Variable(torch.zeros(1, x_i.size(dim=0), self.hidden_interactions))
+        else:
+            self.h_0_interactions = Variable(torch.zeros(1, x_i.size(dim=1), self.hidden_interactions))
+            self.c_0_interactions = Variable(torch.zeros(1, x_i.size(dim=1), self.hidden_interactions))
 
         # Interactions forward:
         x_interactions = torch.cat((x_i, x_neighbour), 2) # concatenate over the features
@@ -253,19 +237,25 @@ class model(nn.Module):
 
         
         # Initialize first hidden short and long term states for future lstm
-        self.fut_states = self.hidden_states_fut(x_i_fut).view(2,100,64)
+        if self.batch_first:
+            self.fut_states = self.hidden_states_fut(x_i_fut).view(self.input_size, self.batch_size, 2*self.hidden_future)
+        else:
+            self.fut_states = self.hidden_states_fut(x_i_fut).view(self.input_size,self.batch_size, 2*self.hidden_future)
 
-        
         self.h_0_future = self.fut_states[:,:,0 :self.hidden_future]
         self.c_0_future = self.fut_states[:,:,self.hidden_future::]
         
         # Future forward:
         _, (self.future_h_out, c_out) = self.future(x_i_fut, (self.h_0_future, self.c_0_future))
 
-    
+
         # Create e_x and e_y
-        self.e_x = torch.cat((self.history_h_out, self.interactions_h_out), 2)
-        self.e_y = self.future_h_out[0, :, :].view(1, 100, 32)
+        if batch_first:
+            self.e_x = torch.cat((self.history_h_out, self.interactions_h_out), 2).view(self.batch_size, 1, self.hidden_history + self.hidden_interactions)
+            self.e_y = self.future_h_out[0, :, :].view(self.batch_size, 1, self.hidden_future)
+        else:
+            self.e_x = torch.cat((self.history_h_out, self.interactions_h_out), 2)
+            self.e_y = self.future_h_out[0, :, :].view(1, self.batch_size, self.hidden_future)
 
 
         # Create inputs that generate discrete distributions matrices M_q and M_p
@@ -284,7 +274,10 @@ class model(nn.Module):
         #self.z_q = self.one_hot_encode_M(self.M_q_norm)
         #self.z_q = self.z_q.type(torch.FloatTensor).view(1,100,25)
 
-        self.z_q_good = torch.FloatTensor(self.prob_one_hot(self.M_q_norm.tolist(), 25)).view(1, 100,25*25)
+        if batch_first:
+            self.z_q_good = torch.FloatTensor(self.prob_one_hot(self.M_q_norm.tolist(), self.num_samples)).view(1, self.batch_size,self.num_samples**2).view(self.batch_size, 1, self.num_samples**2)
+        else:
+            self.z_q_good = torch.FloatTensor(self.prob_one_hot(self.M_q_norm.tolist(), self.num_samples)).view(1, self.batch_size,self.num_samples**2)
 
         # Create first hidden state for GRU layer
         #self.h_0_GRU = Variable(self.hidden_state_GRU(self.z_q))
@@ -298,8 +291,8 @@ class model(nn.Module):
 
         self.y_preds = []
 
-        for i in range(25):
-            self.input_GRU_good = torch.cat((self.z_q_good[:,:,25*i:25*(i+1)], self.e_x, x_i), dim=2)
+        for i in range(self.num_samples):
+            self.input_GRU_good = torch.cat((self.z_q_good[:,:,self.num_samples*i:self.num_samples*(i+1)], self.e_x, x_i), dim=2)
             _, self.h_out_gru = self.gru_good(self.input_GRU_good, (self.h_0_GRU_good))
 
             # GMM model below, outputting the means, log_sigmas, correlation and log_probabilities
@@ -311,7 +304,7 @@ class model(nn.Module):
             
             # Integrate outputs of the GMM model
             self.mus_pos = self.integrate_mu(x_i, self.mus, self.dt)
-            self.sigmas_pos = self.integrate_sigma(torch.zeros(1, 100, 2), torch.exp(self.log_sigmas), self.dt)
+            self.sigmas_pos = self.integrate_sigma(torch.zeros(1, self.batch_size, 2), torch.exp(self.log_sigmas), self.dt)
 
             self.y_pred = torch.cat((self.log_prob, self.mus_pos, self.sigmas_pos, self.corrs), dim=2)
             self.y_preds.append(self.y_pred)
@@ -342,7 +335,7 @@ def loss_function(M_qs, M_ps, y_true, y_pred, beta = 1, alfa =1  ):
 
     """
     # Load parameters locally: #TODO load from self.parameter when in class
-    B = 100
+    B = batch_size
     N = 1
     M = 1
     K = 25
@@ -421,17 +414,30 @@ def biv_N_pdf(x, y, mu_x, mu_y, sig_x, sig_y, rho):
 
 # For debugging the forward function and model
 # initialize model object
-net = model(input_size, History, Future, hidden_history, hidden_interactions, hidden_future, GRU_size, batch_first, K_p, N_p, K_q, N_q)
+net = model(input_size, History, Future, hidden_history, hidden_interactions, hidden_future, GRU_size, batch_first, batch_size, K_p, N_p, K_q, N_q, num_samples)
 
 # some random data that is NOT batch first (timestep, batchsize, states)
-x_i = torch.rand(1, 100, 2)
-x_neighbour = torch.rand(1, 100, 2)
-x_i_fut = torch.rand(1, 100, 2)
-y_i = torch.rand(1, 100, 2)
+if batch_first:
+    x_i = torch.rand(batch_size, 1, 2)
+    x_neighbour = torch.rand(batch_size, 1, 2)
+    x_i_fut = torch.rand(batch_size, 1, 2)
+    y_i = torch.rand(batch_size, 2)
+else:
+    x_i = torch.rand(1, batch_size, 2)
+    x_neighbour = torch.rand(1, batch_size, 2)
+    x_i_fut = torch.rand(1, batch_size, 2)
+    y_i = torch.rand(1, batch_size, 2)
 
 # do forward function
 y_true = y_i
-y_pred, M_p_norm, M_q_norm = net(x_i, x_neighbour, x_i_fut, y_i)
+optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
 
-print("loss = ", loss_function(M_q_norm, M_p_norm, y_true.view(100,1,2), y_pred.view(100,1,25,1,6)))
+for epoch in range(num_epochs):     
+    y_pred, M_p_norm, M_q_norm = net(x_i, x_neighbour, x_i_fut, y_i)
+    optimizer.zero_grad()
+    loss = loss_function(M_q_norm, M_p_norm, y_true.view(batch_size,1,2), y_pred.view(batch_size,1,25,1,6))
+    loss.backward()
+    optimizer.step()
 
+    if epoch % 100 == 0:
+      print("Epoch: %d, loss: %1.5f" % (epoch, loss.item()))
