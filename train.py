@@ -29,20 +29,52 @@ from tqdm import tqdm, tqdm_notebook
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 
-##### PREPROCESSING
-path = Path('data/pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
-scene = Scene(path, header=0)
-X_i, X_i_fut, Y_i, X_neighbours, X_i_present = scene.get_batches()
 
-##### INIT TRAINING
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def train(scene, model, optimizer, 
+          SEED = 42 
+          DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+          num_epochs = 100,
+          learning_rate = 0.01):
+    """
+    
 
-print('Training on',DEVICE)
-SEED = 42
-np.random.seed(SEED)
-torch.manual_seed(SEED)
-torch.cuda.manual_seed(SEED)
-torch.backends.cudnn.deterministic = True
+    Parameters
+    ----------
+    scene : scene object containing training data
+    model : neural network to trian
+    optimizer : optimizer used for training, e.g. SGD
+
+    Returns
+    -------
+    None.
+
+    """
+    print('Training on',DEVICE)
+    #### Preprocess data from scene object:
+    X_i, X_i_fut, Y_i, X_neighbours, X_i_present = scene.get_batches()
+    
+    #### Make output deterministic 
+    np.random.seed(SEED)
+    torch.manual_seed(SEED)
+    torch.cuda.manual_seed(SEED)
+    torch.backends.cudnn.deterministic = True
+    
+    #### Train mdoel
+    for epoch in range(num_epochs):
+        y_pred, M_ps, M_qs = net(X_i, X_neighbours, X_i_fut, Y_i)
+        loss = net.loss_function(M_qs, M_ps, Y_i, y_pred)
+        optimizer.step()
+        losses_train.append(loss.item())
+        print("Epoch: %d, loss: %1.5f" % (epoch, loss.item()))
+        
+        #TODO: add validation data later as well
+
+    return
+    
+    
+
+
+
 
 num_epochs = 1000
 learning_rate = 0.01
