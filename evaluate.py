@@ -9,7 +9,7 @@ Evaluate function
     Test loss
     Visualize results
 """
-
+import matplotlib.pyplot as plt
 def evaluate(scene, net, plot = True):
     
     #### Assign preprocessed data
@@ -28,6 +28,15 @@ def evaluate(scene, net, plot = True):
     #     loss = net.loss_function(M_qs, M_ps, Y_i.view(B,1,2), y_pred.view(B,1,25,1,6)).item()
     # else:
     #     loss = net.loss_function(M_qs, M_ps, Y_i.view(B,1,2), y_pred.view(B,1,1,1,6)).item()
+    
+    y_true = Y_i.reshape((-1, 2)).detach().numpy()
+    y_pred = y_pred[:,:,:, 1:3].reshape(-1,2).detach().numpy()
+    
+    if plot:
+        for B in range(10):
+            plt.figure()
+            plt.scatter(y_true[10*B:10*B+10,0], y_true[10*B:10*B+10,1], c='blue')
+            plt.scatter(y_pred[10*B:10*B+10,0], y_pred[10*B:10*B+10,1], c='red')
     
     ADE = 0
     FDE = 0
