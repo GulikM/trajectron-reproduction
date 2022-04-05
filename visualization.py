@@ -158,6 +158,6 @@ def plot_node(df, i):
     plt.plot(df_i['x'],df_i['y'])
     
 
-plot_node(df, 11)
-plot_traj(df, df, 0, 40)
+# plot_node(df, 11)
+# plot_traj(df, df, 0, 40)
 

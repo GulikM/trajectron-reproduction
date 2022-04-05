@@ -21,43 +21,26 @@ from sklearn.decomposition import PCA
 import random
 
 
-
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-print('Training on',DEVICE)
-SEED = 42
-
-
-num_epochs = 1000
-learning_rate = 0.01
-
-input_size = 2
-hidden_size = 32
-num_layers = 1
-History = 3
-Future = 3
-num_classes = 2
-K_p = 25
-N_p = 1
-K_q = 25
-N_q = 1
-
-hidden_history = 32
-hidden_interactions = 8
-hidden_future = 32
-
-batch_first = False
-
-GRU_size = 128
-
 class model(nn.Module):
-    def __init__(self, input_size, H, F, hidden_history, hidden_interactions, hidden_future, GRU_size, batch_first, K_p, N_p, K_q, N_q):
+    def __init__(self, input_size = 2, 
+                 History = 3, 
+                 Future = 3, 
+                 hidden_history = 32, 
+                 hidden_interactions = 8, 
+                 hidden_future = 32, 
+                 GRU_size = 128, 
+                 batch_first = False, 
+                 K_p = 25, 
+                 N_p = 1, 
+                 K_q = 25, 
+                 N_q = 1):
+        
         super(model, self).__init__()
 
         # initialize parameters for the different layers
         self.input_size = input_size
-        self.H = H
-        self.F = F
+        self.H = History
+        self.F = Future
         self.hidden_history = hidden_history
         self.hidden_interactions = hidden_interactions
         self.hidden_future = hidden_future
@@ -416,14 +399,13 @@ def biv_N_pdf(x, y, mu_x, mu_y, sig_x, sig_y, rho):
     return f
         
 
-# For debugging the forward function and model
-# initialize model object
-net = model(input_size, History, Future, hidden_history, hidden_interactions, hidden_future, GRU_size, batch_first, K_p, N_p, K_q, N_q)
+
+net = model(input_size = 4)
 
 # some random data that is NOT batch first (timestep, batchsize, states)
-x_i = torch.rand(1, 100, 2)
-x_neighbour = torch.rand(1, 100, 2)
-x_i_fut = torch.rand(1, 100, 2)
+x_i = torch.rand(1, 100, 4)
+x_neighbour = torch.rand(1, 100, 4)
+x_i_fut = torch.rand(1, 100, 4)
 y_i = torch.rand(1, 100, 2)
 
 # do forward function

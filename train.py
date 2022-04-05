@@ -30,18 +30,19 @@ from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 
 
-def train(scene, model, optimizer, 
-          SEED = 42 
+def train(scene, net, 
+          optimizer = torch.optim.Adam(params=model.parameters(), lr=1e-2), 
+          SEED = 42, 
           DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
           num_epochs = 100,
-          learning_rate = 0.01):
+          plot = True):
     """
     
 
     Parameters
     ----------
     scene : scene object containing training data
-    model : neural network to trian
+    net : neural network to trian
     optimizer : optimizer used for training, e.g. SGD
 
     Returns
@@ -60,7 +61,11 @@ def train(scene, model, optimizer,
     torch.backends.cudnn.deterministic = True
     
     #### Train mdoel
+    model.train()
+    losses_train = []
+    
     for epoch in range(num_epochs):
+        optimizer.zero_grad()
         y_pred, M_ps, M_qs = net(X_i, X_neighbours, X_i_fut, Y_i)
         loss = net.loss_function(M_qs, M_ps, Y_i, y_pred)
         optimizer.step()
@@ -69,54 +74,10 @@ def train(scene, model, optimizer,
         
         #TODO: add validation data later as well
 
-    return
+    if plot:
+        plt.plot(losses_train)
+        plt.xlabel('epochs')
+        plt.ylabel('loss')
     
     
-
-
-
-
-num_epochs = 1000
-learning_rate = 0.01
-
-input_size = 4
-hidden_size = 32
-num_layers = 1
-History = 3
-Future = 3
-num_classes = 2
-K_p = 25
-N_p = 1
-K_q = 25
-N_q = 1
-
-hidden_history = 32
-hidden_interactions = 8
-hidden_future = 32
-
-batch_first = True
-
-GRU_size = 128
-
-# For debugging the forward function and model
-# initialize model object
-net = model(input_size, History, Future, hidden_history, hidden_interactions, hidden_future, GRU_size, batch_first, K_p, N_p, K_q, N_q)
-
-# do forward function
-y_pred, M_p_norm, M_q_norm = net.forward(X_i, X_neighbours, X_i_fut, Y_i)
-
-
-
-for epoch in range(num_epochs):
-    y_pred, M_p_norm, M_q_norm = net.forward(X_i, X_neighbours, X_i_fut, Y_i)
-    optimizer.zero_grad()
-    # obtain the loss function
-    loss = criterion(outputs, Y_train)
-    loss.backward()   
-    optimizer.step()
-    losses_train.append(loss.item())
-    loss_val = criterion(lstm(X_val), Y_val)
-    losses_val.append(loss_val.item())
-    
-    print("Epoch: %d, loss: %1.5f" % (epoch, loss.item()))
 

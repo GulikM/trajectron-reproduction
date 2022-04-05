@@ -308,7 +308,7 @@ class Scene(object):
         
         return x_i, x_i_fut, y_i, x_R, x_neighbours
         
-    def get_batches(self):
+    def get_batches(self, batch_first = False):
         """
         Iterate over all nodes and times and return batch data of scene
 
@@ -344,13 +344,16 @@ class Scene(object):
                     X_i_fut     = torch.cat((X_i_fut, x_i_fut), dim=1)
                     Y_i         = torch.cat((Y_i, y_i), dim=1)
                     X_neighbours= torch.cat((X_neighbours, x_neighbours), dim=1)
-                    
-        X_i = X_i.reshape((-1, self.H+1, self.input_states))
-        X_neighbours = X_neighbours.reshape((-1, self.H+1, self.input_states))
-        Y_i = Y_i.reshape((-1, self.F, self.output_states))
-        X_i_fut = X_i_fut.reshape((-1, self.F, self.input_states))
         
-        X_i_present = X_i[:,-1,:]
+        if batch_first: 
+            X_i = X_i.reshape((-1, self.H+1, self.input_states))
+            X_neighbours = X_neighbours.reshape((-1, self.H+1, self.input_states))
+            Y_i = Y_i.reshape((-1, self.F, self.output_states))
+            X_i_fut = X_i_fut.reshape((-1, self.F, self.input_states))
+            
+            X_i_present = X_i[:,-1,:]
+        else:
+            X_i_present = X_i[-1,:,:]
         
         return X_i, X_i_fut, Y_i, X_neighbours, X_i_present
 
