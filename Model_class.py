@@ -4,6 +4,7 @@ from torch import nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 import random
+import preprocessing as pre
 
 # Use gpu if available
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -19,13 +20,13 @@ torch.backends.cudnn.deterministic = True
 
 
 # Train variables
-num_epochs = 1
+num_epochs = 500
 learning_rate = 0.01
-batch_size = 256
+batch_size = 4027
 
 # Model variables
 input_size = 4
-History = 9
+History = 3
 Future = 1
 num_classes = 2
 K_p = 25
@@ -98,7 +99,7 @@ class model(nn.Module):
         """
         # Use linear layer once to initialize the first long term and short term states
 
-        self.hidden_states_fut = nn.Linear(self.H*self.input_size, 
+        self.hidden_states_fut = nn.Linear(self.input_size, 
                                            2*2*self.hidden_future) # 2 times since hidden_future size since long term and short term memory need to be initialized
                                                                  # also 2 times for the bidirectional part
 
@@ -252,7 +253,7 @@ class model(nn.Module):
         if self.batch_first:
             self.fut_states = self.hidden_states_fut(x_i_fut.view)
         else:
-            self.fut_states = self.hidden_states_fut(x_i_fut.view(self.batch_size, self.H*self.input_size))
+            self.fut_states = self.hidden_states_fut(x_i_fut.view(self.batch_size, self.input_size))
         self.h_0_future = self.fut_states[:, 0:self.hidden_future*2]
         self.c_0_future = self.fut_states[:, 2*self.hidden_future::]
         
@@ -433,10 +434,38 @@ def biv_N_pdf(x, y, mu_x, mu_y, sig_x, sig_y, rho):
     return f
         
 
+
+
+# Load data
+path = pre.Path('data/pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
+
+
+
+pedestrian = pre.NodeType('pedestrian')
+scene = pre.Scene(path, header=0)
+
+x_i, x_i_fut, y_i, x_neighbour, x_i_present = scene.get_batches()
+
+x_i = x_i.view(History, batch_size, input_size).to(torch.float32)
+x_i_fut = x_i_fut.view(1, batch_size, input_size).to(torch.float32)
+y_i = y_i.view(1, batch_size, 2).to(torch.float32)
+x_neighbour =  x_neighbour.view(History, batch_size, input_size).to(torch.float32)
+
+print("Loaded the data")
+print(x_i.dtype)
+print(x_i_fut.dtype)
+print(y_i.dtype)
+print(x_neighbour.dtype)
+print()
+print(x_i.shape)
+print(x_i_fut.shape)
+print(y_i.shape)
+print(x_neighbour.shape)
 # For debugging the forward function and model
 # initialize model object
 net = model(input_size, History, Future, hidden_history, hidden_interactions, hidden_future, GRU_size, batch_first, batch_size, K_p, N_p, K_q, N_q, num_samples)
 
+"""
 # some random data that is NOT batch first (timestep, batchsize, states)
 if batch_first:
     x_i = torch.rand(batch_size, 1, input_size)
@@ -446,9 +475,20 @@ if batch_first:
 else:
     x_i = torch.rand(History, batch_size, input_size)
     x_neighbour = torch.rand(History, batch_size, input_size)
-    x_i_fut = torch.rand(History, batch_size, input_size)
-    y_i = torch.rand(Future, batch_size, input_size)
+    x_i_fut = torch.rand(1, batch_size, input_size)
+    y_i = torch.rand(Future, batch_size, 2)
 
+print()
+print(x_i.dtype)
+print(x_i_fut.dtype)
+print(y_i.dtype)
+print(x_neighbour.dtype)
+print()
+print(x_i.shape)
+print(x_i_fut.shape)
+print(y_i.shape)
+print(x_neighbour.shape)
+"""
 # do forward function
 y_true = y_i[:, :, :2]
 optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
@@ -460,5 +500,4 @@ for epoch in range(num_epochs):
     loss.backward()
     optimizer.step()
 
-    if epoch % 100 == 0:
-      print("Epoch: %d, loss: %1.5f" % (epoch, loss.item()))
+    print("Epoch: %d, loss: %1.5f" % (epoch, loss.item()))

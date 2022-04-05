@@ -55,7 +55,7 @@ class Node(object):
         subset = self.data[cols]
         mask1 = subset['t'] >  lower
         mask2 = subset['t'] <= upper
-        mask = mask1 * mask2
+        mask = mask1 & mask2
         return subset.loc[mask].to_numpy()
     
     def X(self, H: int, cols: List[str]):
@@ -90,7 +90,7 @@ class Scene(object):
         
         self.attention_radius = 5 # m (for pedestrians)
         self.H = 2
-        self.F = 3
+        self.F = 1
         self.data_cols   = ['t', 'id', 'x', 'y', 'vx', 'vy']
         self.input_cols  = ['x', 'y', 'vx', 'vy']
         self.output_cols = ['x', 'y']
@@ -151,7 +151,7 @@ class Scene(object):
         if not(t==None):
             mask_t  = self.data['t']  == t
  
-        mask = mask_t * mask_id
+        mask = mask_t & mask_id
         
         return self.data[mask]
 
@@ -207,7 +207,7 @@ class Scene(object):
             
         mask1 = self.data['t'] >  lower
         mask2 = self.data['t'] <= upper
-        mask = mask1 * mask2 * mask_id
+        mask = mask1 & mask2 & mask_id
         
         
         subset = self.data[cols]
@@ -350,7 +350,6 @@ class Scene(object):
         
         return X_i, X_i_fut, Y_i, X_neighbours, X_i_present
 
-# path = Path(r'.\trajectron-reproduction\data\pedestrians\eth\train\biwi_hotel_train.csv') # data source
 #path = Path('data/pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
 
 
@@ -358,7 +357,7 @@ class Scene(object):
 #pedestrian = NodeType('pedestrian')
 #scene = Scene(path, header=0)
 
-#X_i, X_i_fut, Y_i, X_neighbours = scene.get_batches()
+#X_i, X_i_fut, Y_i, X_neighbours, X_i_present = scene.get_batches()
 
 
 
