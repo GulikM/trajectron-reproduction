@@ -16,10 +16,6 @@ import numpy as np
 import torch
 from typing import List, Union, Optional
 
-# path = Path(r'.\trajectron-reproduction\data\pedestrians\eth\train\biwi_hotel_train.csv') # data source
-# path = Path('data/pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
-
-
 class NodeType(object):
     def __init__(self, name: str) -> None:
         self.name = name
@@ -354,13 +350,15 @@ class Scene(object):
         
         return X_i, X_i_fut, Y_i, X_neighbours, X_i_present
 
+# path = Path(r'.\trajectron-reproduction\data\pedestrians\eth\train\biwi_hotel_train.csv') # data source
+#path = Path('data/pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
 
 
-# pedestrian = NodeType('pedestrian')
-# scene = Scene(path, header=0)
 
-# X_i, X_i_fut, Y_i, X_neighbours = scene.get_batches()
+#pedestrian = NodeType('pedestrian')
+#scene = Scene(path, header=0)
 
+#X_i, X_i_fut, Y_i, X_neighbours = scene.get_batches()
 
 
 

@@ -4,7 +4,6 @@ from torch import nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 import random
-import preprocessing
 
 # Use gpu if available
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -18,13 +17,14 @@ torch.manual_seed(SEED)
 torch.cuda.manual_seed(SEED)
 torch.backends.cudnn.deterministic = True
 
+
 # Train variables
-num_epochs = 1000
+num_epochs = 1
 learning_rate = 0.01
 batch_size = 200
 
 # Model variables
-input_size = 2
+input_size = 4
 History = 1
 Future = 1
 num_classes = 2
@@ -39,7 +39,6 @@ hidden_future = 32
 GRU_size = 128
 
 batch_first = False
-
 
 class model(nn.Module):
     def __init__(self, input_size, H, F, hidden_history, hidden_interactions, hidden_future, GRU_size, batch_first,  batch_size, K_p, N_p, K_q, N_q, num_samples):
@@ -68,7 +67,7 @@ class model(nn.Module):
         self.log_sigmas_size = 2
         self.corrs_size = 1
 
-
+        self.debug = True
         # Below the initialization of the layers used in the model
         """
         LSTM layer that takes two inputs, x and y, has a hidden state of 32 dimensions (aka 32 features),
@@ -100,7 +99,7 @@ class model(nn.Module):
         # Use linear layer once to initialize the first long term and short term states
 
         self.hidden_states_fut = nn.Linear(self.input_size, 
-                                           self.input_size*2*self.hidden_future) # 2 times since hidden_future size since long term and short term memory need to be initialized
+                                           2*2*self.hidden_future) # 2 times since hidden_future size since long term and short term memory need to be initialized
                                                                  # also 2 times for the bidirectional part
 
 
@@ -136,7 +135,7 @@ class model(nn.Module):
         self.hidden_state_GRU = nn.Linear(self.K_q**self.N_q,
                                           self.GRU_size)
 
-        self.h_gru_good = nn.Linear(self.K_q**self.N_q*25,
+        self.h_gru_good = nn.Linear(self.K_q**self.N_q*self.num_samples,
                                     self.GRU_size)
 
         self.gru = nn.GRU(input_size=self.input_size + self.hidden_history + self.hidden_interactions + self.K_q**self.N_q, 
@@ -214,20 +213,25 @@ class model(nn.Module):
 
         # Initialize first hidden short and long term states for history lstm
         if self.batch_first:
-            self.h_0_history = Variable(torch.zeros(1, x_i.size(dim=0), self.hidden_history))
-            self.c_0_history = Variable(torch.zeros(1, x_i.size(dim=0), self.hidden_history))
+            self.h_0_history = Variable(torch.zeros(x_i.size(dim=0), 1, self.hidden_history))
+            self.c_0_history = Variable(torch.zeros(x_i.size(dim=0), 1, self.hidden_history))
         else:
             self.h_0_history = Variable(torch.zeros(1, x_i.size(dim=1), self.hidden_history))
             self.c_0_history = Variable(torch.zeros(1, x_i.size(dim=1), self.hidden_history))
         # History forward:
         _, (self.history_h_out, c_out) = self.history(x_i, (self.h_0_history, self.c_0_history))
         
-
+        if self.debug:
+            print("History states and output:")
+            print(self.h_0_history.shape)
+            print(self.c_0_history.shape)
+            print(self.history_h_out.shape)
+            print()
 
         # Initialize first hidden short and long term states for interactions lstm   
         if self.batch_first:
-            self.h_0_interactions = Variable(torch.zeros(1, x_i.size(dim=0), self.hidden_interactions))
-            self.c_0_interactions = Variable(torch.zeros(1, x_i.size(dim=0), self.hidden_interactions))
+            self.h_0_interactions = Variable(torch.zeros(x_i.size(dim=0), 1, self.hidden_interactions))
+            self.c_0_interactions = Variable(torch.zeros(x_i.size(dim=0), 1, self.hidden_interactions))
         else:
             self.h_0_interactions = Variable(torch.zeros(1, x_i.size(dim=1), self.hidden_interactions))
             self.c_0_interactions = Variable(torch.zeros(1, x_i.size(dim=1), self.hidden_interactions))
@@ -236,19 +240,35 @@ class model(nn.Module):
         x_interactions = torch.cat((x_i, x_neighbour), 2) # concatenate over the features
         _, (self.interactions_h_out, c_out) = self.interactions(x_interactions, (self.h_0_interactions, self.h_0_interactions))
 
-        
+        if self.debug:
+            print("Interactions states and output:")
+            print(self.h_0_interactions.shape)
+            print(self.c_0_interactions.shape)
+            print(self.interactions_h_out.shape)
+            print()
+
+            
         # Initialize first hidden short and long term states for future lstm
         if self.batch_first:
-            self.fut_states = self.hidden_states_fut(x_i_fut).view(self.input_size, self.batch_size, 2*self.hidden_future)
+            self.fut_states = self.hidden_states_fut(x_i_fut.view)
         else:
-            self.fut_states = self.hidden_states_fut(x_i_fut).view(self.input_size, self.batch_size, 2*self.hidden_future)
-
-        self.h_0_future = self.fut_states[:,:,0 :self.hidden_future]
-        self.c_0_future = self.fut_states[:,:,self.hidden_future::]
+            self.fut_states = self.hidden_states_fut(x_i_fut.view(self.batch_size, self.input_size))
+        self.h_0_future = self.fut_states[:, 0:self.hidden_future*2]
+        self.c_0_future = self.fut_states[:, 2*self.hidden_future::]
         
+        self.h_0_future = self.h_0_future.reshape(2, self.batch_size, self.hidden_future)
+        self.c_0_future = self.c_0_future.reshape(2, self.batch_size, self.hidden_future)
+
         # Future forward:
         _, (self.future_h_out, c_out) = self.future(x_i_fut, (self.h_0_future, self.c_0_future))
 
+        if self.debug:
+            print("Future states and output:")
+            print(self.fut_states.shape)
+            print(self.h_0_future.shape)
+            print(self.c_0_future.shape)
+            print(self.future_h_out.shape)
+            print()
 
         # Create e_x and e_y
         if batch_first:
@@ -304,7 +324,7 @@ class model(nn.Module):
 
             
             # Integrate outputs of the GMM model
-            self.mus_pos = self.integrate_mu(x_i, self.mus, self.dt)
+            self.mus_pos = self.integrate_mu(x_i[:,:,:2], self.mus, self.dt)
             self.sigmas_pos = self.integrate_sigma(torch.zeros(1, self.batch_size, 2), torch.exp(self.log_sigmas), self.dt)
 
             self.y_pred = torch.cat((self.log_prob, self.mus_pos, self.sigmas_pos, self.corrs), dim=2)
@@ -430,7 +450,7 @@ else:
     y_i = torch.rand(1, batch_size, input_size)
 
 # do forward function
-y_true = y_i
+y_true = y_i[:, :, :2]
 optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
 
 for epoch in range(num_epochs):     
