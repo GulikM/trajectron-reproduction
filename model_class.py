@@ -23,7 +23,8 @@ from gmm2d import GMM2D
 
 
 class model(nn.Module):
-    def __init__(self, batch_size,
+    def __init__(self, 
+                 batch_size,
                  input_size = 4, 
                  History = 3, 
                  Future = 3, 
@@ -49,7 +50,6 @@ class model(nn.Module):
             self.hidden_interactions = hidden_interactions
             self.hidden_future = hidden_future
             self.batch_first = batch_first
-            self.batch_size = batch_size
             self.K_p = K_p
             self.N_p = N_p
             self.K_q = K_q
@@ -66,6 +66,7 @@ class model(nn.Module):
 
             self.debug = False
             self.training = True
+            self.batch_size = batch_size
             # Below the initialization of the layers used in the model
             """
             LSTM layer that takes two inputs, x and y, has a hidden state of 32 dimensions (aka 32 features),
@@ -168,7 +169,7 @@ class model(nn.Module):
         # Below a normalize function that needs to be used after producting the distribution matrices M_p and M_q
         # """
     def normalize(self, M_flat, N, K):
-        M = M_flat.view(self.batch_size, N, K)
+        M = M_flat.view(-1, N, K)
         M_exp = torch.exp(M)
         if self.batch_first == False:
             row_sums = M_exp.sum(axis=0)
@@ -255,46 +256,55 @@ class model(nn.Module):
             
         # Initialize first hidden short and long term states for future lstm
         if self.batch_first:
-            self.fut_states = self.hidden_states_fut(x_i_fut.view)
+            if self.training:
+                self.fut_states = self.hidden_states_fut(x_i_fut.view)
         else:
-            
-            self.fut_states = self.hidden_states_fut(x_i_fut.view(self.batch_size, self.input_size))
-        self.h_0_future = self.fut_states[:, 0:self.hidden_future*2]
-        self.c_0_future = self.fut_states[:, 2*self.hidden_future::]
+            if self.training:
+                self.fut_states = self.hidden_states_fut(x_i_fut.view(-1, self.input_size))
         
-        self.h_0_future = self.h_0_future.reshape(2, self.batch_size, self.hidden_future)
-        self.c_0_future = self.c_0_future.reshape(2, self.batch_size, self.hidden_future)
-
-        # Future forward:
-        _, (self.future_h_out, c_out) = self.future(x_i_fut, (self.h_0_future, self.c_0_future))
-
-        if self.debug:
-            print("Future states and output:")
-            print(self.fut_states.shape)
-            print(self.h_0_future.shape)
-            print(self.c_0_future.shape)
-            print(self.future_h_out.shape)
-            print()
+        if self.training:
+            self.h_0_future = self.fut_states[:, 0:self.hidden_future*2]
+            self.c_0_future = self.fut_states[:, 2*self.hidden_future::]
+            
+            self.h_0_future = self.h_0_future.reshape(2, -1, self.hidden_future)
+            self.c_0_future = self.c_0_future.reshape(2, -1, self.hidden_future)
+    
+            # Future forward:
+            _, (self.future_h_out, c_out) = self.future(x_i_fut, (self.h_0_future, self.c_0_future))
+    
+            if self.debug:
+                print("Future states and output:")
+                print(self.fut_states.shape)
+                print(self.h_0_future.shape)
+                print(self.c_0_future.shape)
+                print(self.future_h_out.shape)
+                print()
 
         # Create e_x and e_y
         if self.batch_first:
-            self.e_x = torch.cat((self.history_h_out, self.interactions_h_out), 2).view(self.batch_size, 1, self.hidden_history + self.hidden_interactions)
-            self.e_y = self.future_h_out[0, :, :].view(self.batch_size, 1, self.hidden_future)
+            self.e_x = torch.cat((self.history_h_out, self.interactions_h_out), 2).view(-1., 1, self.hidden_history + self.hidden_interactions)
+            if self.training:
+                self.e_y = self.future_h_out[0, :, :].view(-1, 1, self.hidden_future)
         else:
             self.e_x = torch.cat((self.history_h_out, self.interactions_h_out), 2)
-            self.e_y = self.future_h_out[0, :, :].view(1, self.batch_size, self.hidden_future)
+            if self.training:
+                self.e_y = self.future_h_out[0, :, :].view(1, -1, self.hidden_future)
 
 
         # Create inputs that generate discrete distributions matrices M_q and M_p
-        self.input_M_q = torch.cat((self.e_x, self.e_y), 2)
+        if self.training:
+            self.input_M_q = torch.cat((self.e_x, self.e_y), 2)
+            self.M_q = self.fcQ(self.input_M_q)
+            self.M_q_norm = self.normalize(self.M_q, self.N_q, self.K_q)
+            
         self.input_M_p = self.e_x
 
         # Create the matrices of discrete distributions Q and P
-        self.M_q = self.fcQ(self.input_M_q)
+        
         self.M_p = self.fcP(self.input_M_p)
 
         # Normalize the matrices of each distribution
-        self.M_q_norm = self.normalize(self.M_q, self.N_q, self.K_q)
+        
         self.M_p_norm = self.normalize(self.M_p, self.N_p, self.K_p)
 
         # Sample the latent variable z_q
@@ -302,9 +312,9 @@ class model(nn.Module):
         #self.z_q = self.z_q.type(torch.FloatTensor).view(1,100,25)
 
         if self.batch_first:
-            self.z_q_good = torch.FloatTensor(self.prob_one_hot(self.M_q_norm.tolist(), self.num_samples)).view(1, self.batch_size,self.num_samples**2).view(self.batch_size, 1, self.num_samples**2)
+            self.z_q_good = torch.FloatTensor(self.prob_one_hot(self.M_p_norm.tolist(), self.num_samples)).view(1, -1,self.num_samples**2).view(-1, 1, self.num_samples**2)
         else:
-            self.z_q_good = torch.FloatTensor(self.prob_one_hot(self.M_q_norm.tolist(), self.num_samples)).view(1, self.batch_size,self.num_samples**2)
+            self.z_q_good = torch.FloatTensor(self.prob_one_hot(self.M_p_norm.tolist(), self.num_samples)).view(1, -1,self.num_samples**2)
 
         # Create first hidden state for GRU layer
         #self.h_0_GRU = Variable(self.hidden_state_GRU(self.z_q))
@@ -319,7 +329,7 @@ class model(nn.Module):
         self.y_preds = []
 
         for i in range(self.num_samples):
-            self.input_GRU_good = torch.cat((self.z_q_good[:,:,self.num_samples*i:self.num_samples*(i+1)], self.e_x, x_i[-1, :, :].view(1, self.batch_size, self.input_size)), dim=2)
+            self.input_GRU_good = torch.cat((self.z_q_good[:,:,self.num_samples*i:self.num_samples*(i+1)], self.e_x, x_i[-1, :, :].view(1, -1, self.input_size)), dim=2)
             _, self.h_out_gru = self.gru_good(self.input_GRU_good, (self.h_0_GRU_good))
 
             # GMM model below, outputting the means, log_sigmas, correlation and log_probabilities
@@ -337,6 +347,9 @@ class model(nn.Module):
             self.y_preds.append(self.y_pred)
 
         self.y_preds = torch.stack(self.y_preds)
+        
+        if self.training==False:
+            self.y_preds = torch.mean(self.y_preds, 0).view(1, 1, -1, 6) # take mean over 25 samples during inference
 
         return self.y_preds, self.M_p_norm, self.M_q_norm
 
@@ -362,11 +375,10 @@ class model(nn.Module):
 
         """
         # Load parameters locally: #TODO load from self.parameter when in class
-        B = self.batch_size
-        N = 1
+        N = self.N_p
         M = 1
-        K = 25
-        F = 1
+        K = self.K_p
+        F = self.F
         alfa = 1
         beta = 1
         
@@ -391,7 +403,7 @@ class model(nn.Module):
         # calcualte Log_likelyhood_loss:
 
         # first reshape y_true, such that the shape matches y_pred:
-        y_true = torch.unsqueeze(torch.unsqueeze(y_true, 3), 4).reshape(B, F, 1, 1, 2)
+        y_true = torch.unsqueeze(torch.unsqueeze(y_true, 3), 4).reshape(-1, F, 1, 1, 2)
         
         # get distribution parameters:
         x = y_true[:, :, :, :, 0]
@@ -411,7 +423,7 @@ class model(nn.Module):
         prob = self.biv_N_pdf(x, y, mu_x, mu_y, sig_x, sig_y, rho) # size = B x F x K^N X M
         prob = torch.squeeze(torch.tensor(prob), 3) # squeeze matrix, as M = 1 for now, so we skip the weighing
         prob = torch.clamp(prob, min = 1e-5) # probability cannot be 0; otherwhise loss will be inf
-        assert(prob.shape == (B, F, K**N))
+        # assert(prob.shape == (B, F, K**N))
         
         weighted_prob = p_i * prob # size: B x F x K^N
         Log_likelyhood_loss_overF = -1 * torch.log(torch.sum(weighted_prob, 2)) # sum over K^N; size = B x F
@@ -422,11 +434,16 @@ class model(nn.Module):
         # print(torch.mean(beta*D_KL), torch.mean(-alfa*I_q), torch.mean(Log_likelyhood_loss))
         loss = torch.mean(beta*D_KL -alfa*I_q + Log_likelyhood_loss)
         # loss = torch.mean(Log_likelyhood_loss)
-        errorx = ((mu_x - x).view(B, self.F, 25 ))
-        errory = ((mu_y - y).view(B, self.F, 25 ))
-        error  = (errorx**2 + errory**2)**0.5
-        loss = torch.mean(error,(0,1,2))
-        
+        if self.training:
+            errorx = ((mu_x - x).view(-1, self.F, 25 ))
+            errory = ((mu_y - y).view(-1, self.F, 25 ))
+            error  = (errorx**2 + errory**2)**0.5
+            loss = torch.mean(error,(0,1,2))
+        else:
+            errorx = ((mu_x - x).view(-1, self.F, 1 ))
+            errory = ((mu_y - y).view(-1, self.F, 1 ))
+            error  = (errorx**2 + errory**2)**0.5
+            loss = torch.mean(error,(0,1,2))
         
         return loss
 
@@ -468,11 +485,10 @@ class model(nn.Module):
 
         """
         # Load parameters locally: #TODO load from self.parameter when in class
-        B = self.batch_size
-        N = 1
+        N = self.N_p
         M = 1
-        K = 25
-        F = 1
+        K = self.K_p
+        F = self.F
         alfa = 1
         beta = 1
         
@@ -497,7 +513,7 @@ class model(nn.Module):
         # calcualte Log_likelyhood_loss:
 
         # first reshape y_true, such that the shape matches y_pred:
-        y_true = torch.unsqueeze(torch.unsqueeze(y_true, 3), 4).reshape(B, F, 1, 1, 2)
+        y_true = torch.unsqueeze(torch.unsqueeze(y_true, 3), 4).reshape(-1, F, 1, 1, 2)
         
         # get distribution parameters:
         x = y_true[:, :, :, :, 0]
@@ -522,7 +538,7 @@ class model(nn.Module):
         prob = self.biv_N_pdf(x, y, mu_x, mu_y, sig_x, sig_y, rho) # size = B x F x K^N X M
         prob = torch.squeeze(torch.tensor(prob), 3) # squeeze matrix, as M = 1 for now, so we skip the weighing
         prob = torch.clamp(prob, min = 1e-5) # probability cannot be 0; otherwhise loss will be inf
-        assert(prob.shape == (B, F, K**N))
+        assert(prob.shape == (-1, F, K**N))
         
         weighted_prob = p_i * prob # size: B x F x K^N
         Log_likelyhood_loss_overF = -1 * torch.log(torch.sum(weighted_prob, 2)) # sum over K^N; size = B x F
@@ -533,8 +549,8 @@ class model(nn.Module):
         # print(torch.mean(beta*D_KL), torch.mean(-alfa*I_q), torch.mean(Log_likelyhood_loss))
         loss = torch.mean(beta*D_KL -alfa*I_q + Log_likelyhood_loss)
         # loss = torch.mean(Log_likelyhood_loss)
-        errorx = ((mu_x - x).view(B, self.F, 25 ))
-        errory = ((mu_y - y).view(B, self.F, 25 ))
+        errorx = ((mu_x - x).view(-1, self.F, 25 ))
+        errory = ((mu_y - y).view(-1, self.F, 25 ))
         error  = (errorx**2 + errory**2)**0.5
         loss = torch.mean(error,(0,1,2))
         
@@ -543,7 +559,7 @@ class model(nn.Module):
         
 
 
-# net = model(batch_size=100, input_size = 4, History=3, Future=1)
+# net = model( input_size = 4, History=3, Future=1)
 
 # # some random data that is NOT batch first (timestep, batchsize, states)
 # x_i = torch.rand(3, 100, 4)

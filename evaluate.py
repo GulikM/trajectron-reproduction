@@ -18,15 +18,20 @@ def evaluate(scene, net, plot = True):
     X_neighbours = scene.X_neighbours
     X_i_fut = scene.X_i_fut
     B = scene.batch_size
-    
+    net.batch_size = B
+
     net.eval()
     net.training = False
     y_pred, M_ps, M_qs = net(X_i, X_neighbours, X_i_fut, Y_i)
-    loss = net.loss_function(M_qs, M_ps, Y_i, y_pred)
     
-    return ADE, FDE, loss
-
-
-def get_metrics():
+    # if net.training:
+    #     loss = net.loss_function(M_qs, M_ps, Y_i.view(B,1,2), y_pred.view(B,1,25,1,6)).item()
+    # else:
+    #     loss = net.loss_function(M_qs, M_ps, Y_i.view(B,1,2), y_pred.view(B,1,1,1,6)).item()
     
+    ADE = 0
+    FDE = 0
     return ADE, FDE
+
+
+
