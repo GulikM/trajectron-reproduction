@@ -30,6 +30,7 @@ from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 
 
+
 def train(scene, net, 
           optimizer = torch.optim.Adam(params=model.parameters(), lr=1e-2), 
           SEED = 42, 
