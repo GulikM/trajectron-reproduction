@@ -7,7 +7,6 @@ Created on Fri Apr  1 10:29:34 2022
 
 from preprocessing import Scene
 from pathlib import Path
-from model_class import model
 from unicodedata import bidirectional
 from matplotlib import pyplot as plt
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox, TextArea
@@ -32,7 +31,6 @@ from sklearn.decomposition import PCA
 
 
 def train(scene, net, 
-          optimizer = torch.optim.Adam(params=model.parameters(), lr=1e-2), 
           SEED = 42, 
           DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
           num_epochs = 100,
@@ -54,7 +52,7 @@ def train(scene, net,
     print('Training on',DEVICE)
     #### Preprocess data from scene object:
     X_i, X_i_fut, Y_i, X_neighbours, X_i_present = scene.get_batches()
-    
+    B = X_i.shape[1]
     #### Make output deterministic 
     np.random.seed(SEED)
     torch.manual_seed(SEED)
@@ -62,16 +60,18 @@ def train(scene, net,
     torch.backends.cudnn.deterministic = True
     
     #### Train mdoel
-    model.train()
+    optimizer = torch.optim.Adam(params=net.parameters(), lr=1e-2)
+    net.train()
     losses_train = []
     
     for epoch in range(num_epochs):
         optimizer.zero_grad()
         y_pred, M_ps, M_qs = net(X_i, X_neighbours, X_i_fut, Y_i)
-        loss = net.loss_function(M_qs, M_ps, Y_i, y_pred)
+        loss = net.loss_function(M_qs, M_ps, Y_i.view(B,1,2), y_pred.view(B,1,25,1,6))
+        loss.backward()
         optimizer.step()
         losses_train.append(loss.item())
-        print("Epoch: %d, loss: %1.5f" % (epoch, loss.item()))
+        print("Epoch: ", epoch," Loss: ", loss.item())
         
         #TODO: add validation data later as well
 

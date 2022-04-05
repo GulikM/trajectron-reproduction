@@ -94,7 +94,7 @@ class Scene(object):
         
         self.attention_radius = 5 # m (for pedestrians)
         self.H = 2
-        self.F = 3
+        self.F = 1
         self.data_cols   = ['t', 'id', 'x', 'y', 'vx', 'vy']
         self.input_cols  = ['x', 'y', 'vx', 'vy']
         self.output_cols = ['x', 'y']
@@ -355,7 +355,7 @@ class Scene(object):
         else:
             X_i_present = X_i[-1,:,:]
         
-        return X_i, X_i_fut, Y_i, X_neighbours, X_i_present
+        return X_i.to(torch.float32), X_i_fut.to(torch.float32), Y_i.to(torch.float32), X_neighbours.to(torch.float32), X_i_present.to(torch.float32)
 
 
 

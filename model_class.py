@@ -64,6 +64,7 @@ class model(nn.Module):
             self.corrs_size = 1
 
             self.debug = False
+            self.training = True
             # Below the initialization of the layers used in the model
             """
             LSTM layer that takes two inputs, x and y, has a hidden state of 32 dimensions (aka 32 features),
@@ -94,7 +95,7 @@ class model(nn.Module):
             """
             # Use linear layer once to initialize the first long term and short term states
 
-            self.hidden_states_fut = nn.Linear(self.H*self.input_size, 
+            self.hidden_states_fut = nn.Linear(self.input_size, 
                                                2*2*self.hidden_future) # 2 times since hidden_future size since long term and short term memory need to be initialized
                                                                      # also 2 times for the bidirectional part
 
@@ -197,10 +198,17 @@ class model(nn.Module):
     def prob_one_hot(self, prob_tensor, n_samples: int = 25):
         length = len(prob_tensor)
         samples = []
-        for i in range(length):
-            samples.append(random.choices(self.one_hot_motion_primitives(n_samples).tolist(), 
-                                          weights=prob_tensor[i][0]/np.sum(prob_tensor[i][0]), 
-                                          k=n_samples))
+        z_i = self.one_hot_motion_primitives(n_samples)
+        # sample every primitive ones in training, sample according to probability during inference
+        if self.training:
+            # output is: z_i: B x K^N x N x K
+            for i in range(length):
+                samples.append(z_i.tolist())
+        else:
+            for i in range(length):
+                samples.append(random.choices(self.one_hot_motion_primitives(n_samples).tolist(), 
+                                              weights=prob_tensor[i][0]/np.sum(prob_tensor[i][0]), 
+                                              k=n_samples))
         return samples
 
 
@@ -248,7 +256,8 @@ class model(nn.Module):
         if self.batch_first:
             self.fut_states = self.hidden_states_fut(x_i_fut.view)
         else:
-            self.fut_states = self.hidden_states_fut(x_i_fut.view(self.batch_size, self.H*self.input_size))
+            
+            self.fut_states = self.hidden_states_fut(x_i_fut.view(self.batch_size, self.input_size))
         self.h_0_future = self.fut_states[:, 0:self.hidden_future*2]
         self.c_0_future = self.fut_states[:, 2*self.hidden_future::]
         
@@ -409,7 +418,9 @@ class model(nn.Module):
         Log_likelyhood_loss = torch.mean(Log_likelyhood_loss_overF, 1) # take mean over F; size = B
         
         # calculate trainings loss:
+        # print(torch.mean(beta*D_KL), torch.mean(-alfa*I_q), torch.mean(Log_likelyhood_loss))
         loss = torch.mean(beta*D_KL -alfa*I_q + Log_likelyhood_loss)
+        # loss = torch.mean(Log_likelyhood_loss)
         return loss
 
     def biv_N_pdf(self,x, y, mu_x, mu_y, sig_x, sig_y, rho):
@@ -430,16 +441,16 @@ class model(nn.Module):
         
 
 
-net = model(batch_size=100, input_size = 4, History=3, Future=1)
+# net = model(batch_size=100, input_size = 4, History=3, Future=1)
 
-# some random data that is NOT batch first (timestep, batchsize, states)
-x_i = torch.rand(3, 100, 4)
-x_neighbour = torch.rand(3, 100, 4)
-x_i_fut = torch.rand(1, 100, 4)
-y_i = torch.rand(1, 100, 2)
+# # some random data that is NOT batch first (timestep, batchsize, states)
+# x_i = torch.rand(3, 100, 4)
+# x_neighbour = torch.rand(3, 100, 4)
+# x_i_fut = torch.rand(1, 100, 4)
+# y_i = torch.rand(1, 100, 2)
 
-# do forward function
-y_true = y_i
-y_pred, M_p_norm, M_q_norm = net(x_i, x_neighbour, x_i_fut, y_i)
+# # do forward function
+# y_true = y_i
+# y_pred, M_p_norm, M_q_norm = net(x_i, x_neighbour, x_i_fut, y_i)
 
-print("loss = ", loss_function(M_q_norm, M_p_norm, y_true.view(100,1,2), y_pred.view(100,1,25,1,6)).item())
+# # print("loss = ", loss_function(M_q_norm, M_p_norm, y_true.view(100,1,2), y_pred.view(100,1,25,1,6)).item())
