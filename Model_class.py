@@ -21,11 +21,11 @@ torch.backends.cudnn.deterministic = True
 # Train variables
 num_epochs = 1
 learning_rate = 0.01
-batch_size = 200
+batch_size = 256
 
 # Model variables
 input_size = 4
-History = 1
+History = 9
 Future = 1
 num_classes = 2
 K_p = 25
@@ -67,7 +67,7 @@ class model(nn.Module):
         self.log_sigmas_size = 2
         self.corrs_size = 1
 
-        self.debug = True
+        self.debug = False
         # Below the initialization of the layers used in the model
         """
         LSTM layer that takes two inputs, x and y, has a hidden state of 32 dimensions (aka 32 features),
@@ -98,7 +98,7 @@ class model(nn.Module):
         """
         # Use linear layer once to initialize the first long term and short term states
 
-        self.hidden_states_fut = nn.Linear(self.input_size, 
+        self.hidden_states_fut = nn.Linear(self.H*self.input_size, 
                                            2*2*self.hidden_future) # 2 times since hidden_future size since long term and short term memory need to be initialized
                                                                  # also 2 times for the bidirectional part
 
@@ -252,7 +252,7 @@ class model(nn.Module):
         if self.batch_first:
             self.fut_states = self.hidden_states_fut(x_i_fut.view)
         else:
-            self.fut_states = self.hidden_states_fut(x_i_fut.view(self.batch_size, self.input_size))
+            self.fut_states = self.hidden_states_fut(x_i_fut.view(self.batch_size, self.H*self.input_size))
         self.h_0_future = self.fut_states[:, 0:self.hidden_future*2]
         self.c_0_future = self.fut_states[:, 2*self.hidden_future::]
         
@@ -313,7 +313,7 @@ class model(nn.Module):
         self.y_preds = []
 
         for i in range(self.num_samples):
-            self.input_GRU_good = torch.cat((self.z_q_good[:,:,self.num_samples*i:self.num_samples*(i+1)], self.e_x, x_i), dim=2)
+            self.input_GRU_good = torch.cat((self.z_q_good[:,:,self.num_samples*i:self.num_samples*(i+1)], self.e_x, x_i[-1, :, :].view(1, self.batch_size, self.input_size)), dim=2)
             _, self.h_out_gru = self.gru_good(self.input_GRU_good, (self.h_0_GRU_good))
 
             # GMM model below, outputting the means, log_sigmas, correlation and log_probabilities
@@ -324,7 +324,7 @@ class model(nn.Module):
 
             
             # Integrate outputs of the GMM model
-            self.mus_pos = self.integrate_mu(x_i[:,:,:2], self.mus, self.dt)
+            self.mus_pos = self.integrate_mu(x_i[-1,:,:2], self.mus, self.dt)
             self.sigmas_pos = self.integrate_sigma(torch.zeros(1, self.batch_size, 2), torch.exp(self.log_sigmas), self.dt)
 
             self.y_pred = torch.cat((self.log_prob, self.mus_pos, self.sigmas_pos, self.corrs), dim=2)
@@ -444,10 +444,10 @@ if batch_first:
     x_i_fut = torch.rand(batch_size, 1, input_size)
     y_i = torch.rand(batch_size, input_size)
 else:
-    x_i = torch.rand(1, batch_size, input_size)
-    x_neighbour = torch.rand(1, batch_size, input_size)
-    x_i_fut = torch.rand(1, batch_size, input_size)
-    y_i = torch.rand(1, batch_size, input_size)
+    x_i = torch.rand(History, batch_size, input_size)
+    x_neighbour = torch.rand(History, batch_size, input_size)
+    x_i_fut = torch.rand(History, batch_size, input_size)
+    y_i = torch.rand(Future, batch_size, input_size)
 
 # do forward function
 y_true = y_i[:, :, :2]
