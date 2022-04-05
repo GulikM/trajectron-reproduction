@@ -93,7 +93,7 @@ class Scene(object):
         #### Load  hyperparameters:
         
         self.attention_radius = 5 # m (for pedestrians)
-        self.H = 2
+        self.H = 3 # INCLUDING t0
         self.F = 1
         self.data_cols   = ['t', 'id', 'x', 'y', 'vx', 'vy']
         self.input_cols  = ['x', 'y', 'vx', 'vy']
@@ -289,18 +289,18 @@ class Scene(object):
             x_neighbours = []
             for neighbour in neighbours:
                 #TODO normalize neighbour data (relative state + standardize)
-                x_neighbour = self.time_window(t-(self.H+1), t, self.input_cols, id=neighbour)
-                if len(x_neighbour)==self.H+1: #TODO: right now we only take into account neighbours with enoug data, but this does not have to be the case
+                x_neighbour = self.time_window(t-(self.H), t, self.input_cols, id=neighbour)
+                if len(x_neighbour)==self.H: #TODO: right now we only take into account neighbours with enoug data, but this does not have to be the case
                     x_neighbours.append(x_neighbour)
 
-            x_neighbours = np.array(x_neighbours).reshape((-1, self.H+1, self.input_states)) 
+            x_neighbours = np.array(x_neighbours).reshape((-1, self.H, self.input_states)) 
 
             if self.aggregation_operation == 'sum':
                 x_neighbours = np.sum(x_neighbours, axis=0)
             else:
                 raise NotImplementedError
  
-        x_i = self.time_window(t-(self.H+1), t, self.input_cols, id=id)
+        x_i = self.time_window(t-(self.H), t, self.input_cols, id=id)
         x_i_fut = self.time_window(t, t+self.F, self.input_cols, id=id)
         y_i = self.time_window(t, t+self.F, self.output_cols, id=id)
          
@@ -323,20 +323,20 @@ class Scene(object):
         
 
         
-        X_i         = torch.zeros((self.H+1, 1, self.input_states))
+        X_i         = torch.zeros((self.H, 1, self.input_states))
         X_i_fut     = torch.zeros((self.F, 1, self.input_states))
         Y_i         = torch.zeros((self.F, 1, self.output_states))
-        X_neighbours= torch.zeros((self.H+1, 1, self.input_states))
+        X_neighbours= torch.zeros((self.H, 1, self.input_states))
         
         for id in self.ids:
             t_range = self.filter_data(id = id)['t'].values
             for t in t_range:
                 x_i, x_i_fut, y_i, x_R, x_neighbours = self.get_batch(id, t) #TODO: make variable for if we use robot or not
-                if (len(x_i)==len(x_neighbours)== self.H+1 and len(x_i_fut)==len(y_i)==self.F): # only store data if sequence long enough
+                if (len(x_i)==len(x_neighbours)== self.H and len(x_i_fut)==len(y_i)==self.F): # only store data if sequence long enough
                 
                     ### convert to pytorch tensor and reshape:
-                    x_i          = torch.tensor(x_i).reshape((self.H+1, 1, self.input_states))
-                    x_neighbours = torch.tensor(x_neighbours).reshape((self.H+1, 1, self.input_states))
+                    x_i          = torch.tensor(x_i).reshape((self.H, 1, self.input_states))
+                    x_neighbours = torch.tensor(x_neighbours).reshape((self.H, 1, self.input_states))
                     y_i          = torch.tensor(y_i).reshape((self.F, 1, self.output_states))
                     x_i_fut      = torch.tensor(x_i_fut).reshape((self.F, 1, self.input_states))     
                     
@@ -346,8 +346,8 @@ class Scene(object):
                     X_neighbours= torch.cat((X_neighbours, x_neighbours), dim=1)
         
         if batch_first: 
-            X_i = X_i.reshape((-1, self.H+1, self.input_states))
-            X_neighbours = X_neighbours.reshape((-1, self.H+1, self.input_states))
+            X_i = X_i.reshape((-1, self.H, self.input_states))
+            X_neighbours = X_neighbours.reshape((-1, self.H, self.input_states))
             Y_i = Y_i.reshape((-1, self.F, self.output_states))
             X_i_fut = X_i_fut.reshape((-1, self.F, self.input_states))
             
@@ -362,18 +362,14 @@ class Scene(object):
         self.X_i = X_i.to(torch.float32)
         self.X_i_fut = X_i_fut.to(torch.float32)
         self.Y_i = Y_i.to(torch.float32)
-        self.X_neighbours = X_neighbours.to(torch.float32), X_i_present.to(torch.float32)
+        self.X_neighbours = X_neighbours.to(torch.float32)
         self.X_i_present = X_i_present.to(torch.float32)
         
-        
-        return X_i.to(torch.float32), X_i_fut.to(torch.float32), Y_i.to(torch.float32), X_neighbours.to(torch.float32), X_i_present.to(torch.float32)
+        print("Preprocessing done")
 
 
-
-# pedestrian = NodeType('pedestrian')
 # scene = Scene(path, header=0)
-
-# X_i, X_i_fut, Y_i, X_neighbours = scene.get_batches()
+# scene.get_batches()
 
 
 

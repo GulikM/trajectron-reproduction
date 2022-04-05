@@ -43,12 +43,14 @@ train_scene = Scene(train_path, header=0)
 test_path = Path('data/pedestrians/eth/train/biwi_hotel_train.txt', safe=False)
 test_scene = Scene(test_path, header=0)
 
-#### Init model and train on data
+#### Preprocess data; init and train model
+# input, output, history and future defined in scene object
+train_scene.get_batches()
 
-# get shapes
-X_i, X_i_fut, Y_i, X_neighbours, _ = train_scene.get_batches()
-
-net = model(batch_size=train_scene.batch_size, input_size = 4, History=3, Future=1)
+net = model(batch_size = train_scene.batch_size, 
+            input_size = train_scene.input_states, 
+            History = train_scene.H, 
+            Future = train_scene.F)
 
 train(train_scene, net)
 

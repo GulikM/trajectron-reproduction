@@ -50,9 +50,14 @@ def train(scene, net,
 
     """
     print('Training on',DEVICE)
-    #### Preprocess data from scene object:
-    X_i, X_i_fut, Y_i, X_neighbours, X_i_present = scene.get_batches()
+    
+    #### Assign preprocessed data
+    X_i = scene.X_i
+    Y_i = scene.Y_i
+    X_neighbours = scene.X_neighbours
+    X_i_fut = scene.X_i_fut
     B = scene.batch_size
+    
     #### Make output deterministic 
     np.random.seed(SEED)
     torch.manual_seed(SEED)

@@ -12,10 +12,15 @@ Evaluate function
 
 def evaluate(scene, net, plot = True):
     
-    #### Preprocess data from scene object:
-    X_i, X_i_fut, Y_i, X_neighbours, X_i_present = scene.get_batches()
+    #### Assign preprocessed data
+    X_i = scene.X_i
+    Y_i = scene.Y_i
+    X_neighbours = scene.X_neighbours
+    X_i_fut = scene.X_i_fut
+    B = scene.batch_size
     
     net.eval()
+    net.training = False
     y_pred, M_ps, M_qs = net(X_i, X_neighbours, X_i_fut, Y_i)
     loss = net.loss_function(M_qs, M_ps, Y_i, y_pred)
     
