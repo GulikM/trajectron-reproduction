@@ -47,9 +47,8 @@ test_scene = Scene(test_path, header=0)
 
 # get shapes
 X_i, X_i_fut, Y_i, X_neighbours, _ = train_scene.get_batches()
-B = X_i.shape[1]
 
-net = model(batch_size=B, input_size = 4, History=3, Future=1)
+net = model(batch_size=train_scene.batch_size, input_size = 4, History=3, Future=1)
 
 train(train_scene, net)
 

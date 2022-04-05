@@ -421,6 +421,12 @@ class model(nn.Module):
         # print(torch.mean(beta*D_KL), torch.mean(-alfa*I_q), torch.mean(Log_likelyhood_loss))
         loss = torch.mean(beta*D_KL -alfa*I_q + Log_likelyhood_loss)
         # loss = torch.mean(Log_likelyhood_loss)
+        errorx = ((mu_x - x).view(B, self.F, 25 ))
+        errory = ((mu_y - y).view(B, self.F, 25 ))
+        error  = (errorx**2 + errory**2)**0.5
+        loss = torch.mean(error,(0,1,2))
+        
+        
         return loss
 
     def biv_N_pdf(self,x, y, mu_x, mu_y, sig_x, sig_y, rho):
@@ -452,5 +458,4 @@ class model(nn.Module):
 # # do forward function
 # y_true = y_i
 # y_pred, M_p_norm, M_q_norm = net(x_i, x_neighbour, x_i_fut, y_i)
-
-# # print("loss = ", loss_function(M_q_norm, M_p_norm, y_true.view(100,1,2), y_pred.view(100,1,25,1,6)).item())
+# print("loss = ", net.loss_function(M_q_norm, M_p_norm, y_true.view(100,1,2), y_pred.view(100,1,25,1,6)).item())

@@ -19,7 +19,7 @@ def evaluate(scene, net, plot = True):
     y_pred, M_ps, M_qs = net(X_i, X_neighbours, X_i_fut, Y_i)
     loss = net.loss_function(M_qs, M_ps, Y_i, y_pred)
     
-    return ADE, FDE, Loss
+    return ADE, FDE, loss
 
 
 def get_metrics():

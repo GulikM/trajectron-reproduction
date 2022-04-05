@@ -352,8 +352,19 @@ class Scene(object):
             X_i_fut = X_i_fut.reshape((-1, self.F, self.input_states))
             
             X_i_present = X_i[:,-1,:]
+            
+            self.batch_size = X_i.shape[0]
         else:
             X_i_present = X_i[-1,:,:]
+            
+            self.batch_size = X_i.shape[1]
+        
+        self.X_i = X_i.to(torch.float32)
+        self.X_i_fut = X_i_fut.to(torch.float32)
+        self.Y_i = Y_i.to(torch.float32)
+        self.X_neighbours = X_neighbours.to(torch.float32), X_i_present.to(torch.float32)
+        self.X_i_present = X_i_present.to(torch.float32)
+        
         
         return X_i.to(torch.float32), X_i_fut.to(torch.float32), Y_i.to(torch.float32), X_neighbours.to(torch.float32), X_i_present.to(torch.float32)
 
