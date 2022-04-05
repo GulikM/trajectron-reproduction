@@ -47,7 +47,8 @@ test_scene = Scene(test_path, header=0)
 net = model()
 train(train_scene, net)
 
-
+#### Evaluate model on test data and visualize results
+# test(test_scene, net)
 
 
 
