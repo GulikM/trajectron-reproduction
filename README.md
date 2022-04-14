@@ -1,5 +1,3 @@
-# Reproducing Trajectron++
-
 | Student Name       | Student ID | e-mail                             |
 | ------------------ | ---------- | ---------------------------------- |
 | Maarten Hugenholtz | 4649516    | M.D.Hugenholtz@student.tudelft.nl  |
@@ -7,20 +5,24 @@
 | Stijn Lafontaine   | 4908457    | S.C.Lafontaine@student.tudelft.nl  |
 | Dirk Remmelzwaal   | 4470702    | D.Remmelzwaal@student.tudelft.nl   |
 
+# Reproducing Trajectron++
+
 On this repository we have attempted to in part recreate the proposed network called [*Trajectron++*](https://arxiv.org/abs/2001.03093). In particular, we sought to evaluate it from purely its textual form and disregard the [existing code](https://github.com/StanfordASL/Trajectron-plus-plus) the authors have created. This was done for two reasons: first, this allowed for a much deeper learning experience for ourselves. Secondly, this provides a highly valuable perspective; in the pragmatic and empirical world of deep learning, papers can at times feel disjointed from their material, and come across as formal translations of a code base rather than as its conceptual foundation. Gradually, we came to the conclusion that completely ignoring the author’s code was not feasible, however, since crucial information for the implementation of the network was left out of the paper. Meaningful results were not obtained. We believe that this has to do with the vanishing gradient problem, possibly caused by a mistake made in rewriting the loss function from its mathematical denotation to functioning code.
 
 ## Trajectron++
 
-In the interest of road safety, predicting future road-user trajectories is important for autonomous agents in this environment. *Trajectron++* was proposed as a means to that end by Salzmann et al. The network forecasts the trajectories of an arbitrary set of nodes (traffic participants), taking into consideration the node histories (past trajectories) and - optionally - some additional information such as local HD maps, raw LIDAR data, camera images and future ego-agent motion plans. For a deep dive into how this information is turned into predictions by the network, see Sections 3 and 4 in [the paper](https://arxiv.org/abs/2001.03093).
+In the interest of road safety, predicting future road-user trajectories is important for autonomous agents in this environment. *Trajectron++*, schematically depicted below, was proposed as a means to that end by Salzmann et al. The network forecasts the trajectories of an arbitrary set of nodes (traffic participants), taking into consideration the node histories (past trajectories) and - optionally - some additional information such as local HD maps, raw LIDAR data, camera images and future ego-agent motion plans. For a deep dive into how this information is turned into predictions by the network, see Sections 3 and 4 in [the paper](https://arxiv.org/abs/2001.03093).
 
-![paper-architecture](/figures/WhatsApp%20Image%202022-04-14%20at%203.03.51%20PM.jpeg)
+![paper-architecture](/figures/WhatsApp%20Image%202022-04-14%20at%203.03.51%20PM.jpeg) \
+*Figure 1: model architecture as found in https://arxiv.org/abs/2001.03093*
 
 ## Our Network Structure
 
 Considering the restricted time available and the breadth of knowledge that needed to be acquired, it was decided to scale down from what was presented in the paper. Notably, the geography data (specifically the HD maps) was omitted as it was not directly available and seemed only supplementary to the concepts that the original paper meant to tackle. 
 The author’s evaluated their *Trajectron++* framework on three publicly-available datasets: *ETH*, *UCY*, and *nuScenes*. We chose to limit our implementation to the *ETH* dataset, however. This dataset consists only of pedestrian trajectories, which, by our understanding, renders the attention layer obsolete since we need not compare different types of road users with each other.
 
-![model](/figures/Trajectron%2B%2B-Page-7.drawio.png)
+![model](/figures/Trajectron%2B%2B-Page-7.drawio.png) \
+*Figure 2: model breakdown used for recreation. [View full diagram here.](https://drive.google.com/file/d/1STz_ccR50ldpR3xOuaD_U6aNo5QEyoP2/view?usp=sharing)*
 
 As can be seen in the network schematic, this leaves us with a network consisting of three types of layers: multiple Long Short Term Memory networks (LSTMs), a single Gated Recurrent Unit (GRU), and multiple fully connected layers (FCs). Together, they make up different architectures, one of which is a Conditional Variational Auto-encoder (CVAE) which produces the parameters of a Gaussian Mixture Model (GMM), which is eventually used for the final trajectory predictions.
 
@@ -58,13 +60,14 @@ After computing these values, the means and variances are then integrated to pro
 ## Results
 As can be seen in the plot of the training loss below, the model learns almost nothing as the loss does not significantly decrease. This could have a variety of reasons. First among these, a mistake may have occurred in converting the complex loss function from its mathematical denotation to our coded implementation. There are for example some conversions from log probabilities to probabilities (and the other way round), which could lead to a vanishing gradient, which prevents the network from learning anything. The reason for using log probabilities is explicity to avoid this problem: log probabilities are numerically more stable, as very small probabilities are converted to large negative numbers instead of values very close to zero. Our hypothesis is that one of these conversions is implemented wrongly, causing the gradient to vanish.
 
-  ![trainloss](/figures/trainloss.png)
+  ![trainloss](/figures/trainloss.png) \
+*Figure 3: Training loss*
   
 Below a visualization of some random predicted trajectories. At first sight the result looks very promising. The plots are deceiving, however. Because of time constraints we only got the model to work for a prediction horizon of 1 timestep. This means that if we predict a velocity of 0 at every time step, the prediction of the network for the next time step will be the same as the current timestep. But since we only have a prediction horizon of 1, the current true position is updated at every prediction, resulting in a noisy prediction which lags behind. So even though the plots look visually pleasing and successful, the learned model is of no use in any practical application. 
 
-  ![Figure3](/figures/Figure_3.png)
-  ![Figure9](/figures/Figure_9.png)
-  ![Figure10](/figures/Figure_10.png)
-  ![Figure11](/figures/Figure_11.png)
-
+  ![Figure4](/figures/Figure_3.png)
+  ![Figure5](/figures/Figure_9.png)
+  ![Figure6](/figures/Figure_10.png)
+  ![Figure7](/figures/Figure_11.png) \
+*Figures 4-7: sample trajectories*
 
