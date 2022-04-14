@@ -2,7 +2,7 @@
 
 On this repository we have attempted to in part recreate the network proposed in [paper](https://arxiv.org/pdf/2001.03093.pdf). In particular, we sought to evaluate it from purely its textual form and disregard the existing code the authors have created. This was done for two reasons: first, this allowed for a much deeper learning experience for ourselves. Secondly, this provides a highly valuable perspective; in the pragmatic and empirical world of deep learning, papers can at times feel disjointed from their material, and come across as formal translations of a code base rather than as its conceptual foundation. Gradually, we came to the conclusion that completely ignoring the author’s code was not feasible, however, since crucial information for the implementation (voorbeeld) of the network was left out of the paper. Meaningful results were not obtained. We hypothesize that …………..
 
-## Introduction
+## Trajectron++
 In the interest of road safety, reasoning about future road-user trajectories is important. *Trajectron++* was proposed as a means to that end by Salzmann et al. The network forecasts the trajectories of an arbitrary set of nodes (traffic participants), taking into consideration the node histories (past trajectories) and (optionally) some additional information such as local HD maps, raw LIDAR data, camera images, and future ego-agent motion plans. For a deep dive into how this information is turned into predictions by the network, see Sections 3 and 4 in [paper](https://arxiv.org/pdf/2001.03093.pdf).
 
 ## Results
