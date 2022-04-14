@@ -1,8 +1,5 @@
 # Reproducing Trajectron++
 
-
-# Reproducing Trajectron++
-
 Maarten Hugenholtz | 4649516 | M.D.Hugenholtz@student.tudelft.nl \
 Mats van der Gulik | 4651286 | M.A.vanderGulik@student.tudelft.nl \
 Stijn Lafontaine   | 4908457 | S.C.Lafontaine@student.tudelft.nl \
