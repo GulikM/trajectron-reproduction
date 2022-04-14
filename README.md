@@ -1,9 +1,11 @@
 # Reproducing Trajectron++
 
-Maarten Hugenholtz | 4649516 | M.D.Hugenholtz@student.tudelft.nl \
-Mats van der Gulik | 4651286 | M.A.vanderGulik@student.tudelft.nl \
-Stijn Lafontaine   | 4908457 | S.C.Lafontaine@student.tudelft.nl \
-Dirk
+| Student Name       | Student ID | e-mail                             |
+| ------------------ | ---------- | ---------------------------------- |
+| Maarten Hugenholtz | 4649516    | M.D.Hugenholtz@student.tudelft.nl  |
+| Mats van der Gulik | 4651286    | M.A.vanderGulik@student.tudelft.nl |
+| Stijn Lafontaine   | 4908457    | S.C.Lafontaine@student.tudelft.nl  |
+| Dirk Remmelzwaal   | 4470702    | D.Remmelzwaal@student.tudelft.nl   |
 
 On this repository we have attempted to in part recreate the proposed network called [*Trajectron++*](https://arxiv.org/abs/2001.03093). In particular, we sought to evaluate it from purely its textual form and disregard the [existing code](https://github.com/StanfordASL/Trajectron-plus-plus) the authors have created. This was done for two reasons: first, this allowed for a much deeper learning experience for ourselves. Secondly, this provides a highly valuable perspective; in the pragmatic and empirical world of deep learning, papers can at times feel disjointed from their material, and come across as formal translations of a code base rather than as its conceptual foundation. Gradually, we came to the conclusion that completely ignoring the author’s code was not feasible, however, since crucial information for the implementation of the network was left out of the paper. Meaningful results were not obtained. We believe that this has to do with the vanishing gradient problem, possibly caused by a mistake made in rewriting the loss function from its mathematical denotation to functioning code.
 
@@ -11,10 +13,15 @@ On this repository we have attempted to in part recreate the proposed network ca
 
 In the interest of road safety, predicting future road-user trajectories is important for autonomous agents in this environment. *Trajectron++* was proposed as a means to that end by Salzmann et al. The network forecasts the trajectories of an arbitrary set of nodes (traffic participants), taking into consideration the node histories (past trajectories) and - optionally - some additional information such as local HD maps, raw LIDAR data, camera images and future ego-agent motion plans. For a deep dive into how this information is turned into predictions by the network, see Sections 3 and 4 in [the paper](https://arxiv.org/abs/2001.03093).
 
+![paper-architecture](/figures/WhatsApp%20Image%202022-04-14%20at%203.03.51%20PM.jpeg)
+
 ## Our Network Structure
 
 Considering the restricted time available and the breadth of knowledge that needed to be acquired, it was decided to scale down from what was presented in the paper. Notably, the geography data (specifically the HD maps) was omitted as it was not directly available and seemed only supplementary to the concepts that the original paper meant to tackle. 
 The author’s evaluated their *Trajectron++* framework on three publicly-available datasets: *ETH*, *UCY*, and *nuScenes*. We chose to limit our implementation to the *ETH* dataset, however. This dataset consists only of pedestrian trajectories, which, by our understanding, renders the attention layer obsolete since we need not compare different types of road users with each other.
+
+![model](/figures/Trajectron%2B%2B-Page-7.drawio.png)
+
 As can be seen in the network schematic, this leaves us with a network consisting of three types of layers: multiple Long Short Term Memory networks (LSTMs), a single Gated Recurrent Unit (GRU), and multiple fully connected layers (FCs). Together, they make up different architectures, one of which is a Conditional Variational Auto-encoder (CVAE) which produces the parameters of a Gaussian Mixture Model (GMM), which is eventually used for the final trajectory predictions.
 
 ### Pre-processing
