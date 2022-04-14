@@ -22,7 +22,7 @@ def evaluate(scene, net, plot = True):
 
     net.eval()
     net.training = False
-    y_pred, M_ps, M_qs = net(X_i, X_neighbours, X_i_fut, Y_i)
+    y_pred, M_ps, M_qs = net(X_i, X_neighbours, X_i_fut*0, Y_i*0)
     
     # if net.training:
     #     loss = net.loss_function(M_qs, M_ps, Y_i.view(B,1,2), y_pred.view(B,1,25,1,6)).item()
@@ -35,8 +35,11 @@ def evaluate(scene, net, plot = True):
     if plot:
         for B in range(10):
             plt.figure()
-            plt.scatter(y_true[10*B:10*B+10,0], y_true[10*B:10*B+10,1], c='blue')
-            plt.scatter(y_pred[10*B:10*B+10,0], y_pred[10*B:10*B+10,1], c='red')
+            plt.xlabel('x position (m)')
+            plt.ylabel('y position (m)')
+            plt.scatter(y_true[10*B:10*B+10,0], y_true[10*B:10*B+10,1], c='blue', label='True position')
+            plt.scatter(y_pred[10*B:10*B+10,0], y_pred[10*B:10*B+10,1], c='red', label='Predicted position')
+            plt.legend()
     
     ADE = 0
     FDE = 0

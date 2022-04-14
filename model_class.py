@@ -434,16 +434,16 @@ class model(nn.Module):
         # print(torch.mean(beta*D_KL), torch.mean(-alfa*I_q), torch.mean(Log_likelyhood_loss))
         loss = torch.mean(beta*D_KL -alfa*I_q + Log_likelyhood_loss)
         # loss = torch.mean(Log_likelyhood_loss)
-        if self.training:
-            errorx = ((mu_x - x).view(-1, self.F, 25 ))
-            errory = ((mu_y - y).view(-1, self.F, 25 ))
-            error  = (errorx**2 + errory**2)**0.5
-            loss = torch.mean(error,(0,1,2))
-        else:
-            errorx = ((mu_x - x).view(-1, self.F, 1 ))
-            errory = ((mu_y - y).view(-1, self.F, 1 ))
-            error  = (errorx**2 + errory**2)**0.5
-            loss = torch.mean(error,(0,1,2))
+        # if self.training:
+        #     errorx = ((mu_x - x).view(-1, self.F, 25 ))
+        #     errory = ((mu_y - y).view(-1, self.F, 25 ))
+        #     error  = (errorx**2 + errory**2)**0.5
+        #     loss = torch.mean(error,(0,1,2))
+        # else:
+        #     errorx = ((mu_x - x).view(-1, self.F, 1 ))
+        #     errory = ((mu_y - y).view(-1, self.F, 1 ))
+        #     error  = (errorx**2 + errory**2)**0.5
+        #     loss = torch.mean(error,(0,1,2))
         
         return loss
 
