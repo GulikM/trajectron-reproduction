@@ -50,5 +50,3 @@ ADE, FDE = evaluate(test_scene, net)
 
 
 
-
-
