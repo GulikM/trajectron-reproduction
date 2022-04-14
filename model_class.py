@@ -19,7 +19,6 @@ from tqdm import tqdm, tqdm_notebook
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 import random
-from gmm2d import GMM2D
 
 
 class model(nn.Module):
@@ -532,9 +531,7 @@ class model(nn.Module):
         # for N=1 p_i is simply equal to Q
         assert(N==1)
         p_i = Q # size = B x N x K. We need size = B x 1 x N^K (for multiplication with prob), so valid for N=1
-      
-        gmm = GMM2D(weight, mu, sig, rho)
-        prob = gmm.log_prob(labels) 
+
         prob = self.biv_N_pdf(x, y, mu_x, mu_y, sig_x, sig_y, rho) # size = B x F x K^N X M
         prob = torch.squeeze(torch.tensor(prob), 3) # squeeze matrix, as M = 1 for now, so we skip the weighing
         prob = torch.clamp(prob, min = 1e-5) # probability cannot be 0; otherwhise loss will be inf

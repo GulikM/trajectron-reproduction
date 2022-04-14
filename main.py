@@ -34,7 +34,7 @@ net = model(batch_size=train_scene.batch_size,
             History = train_scene.H, 
             Future = train_scene.F)
 
-train(train_scene, net, num_epochs = 1)
+train(train_scene, net, num_epochs = 100)
 
 #### Evaluate model on test data and visualize results
 test_scene.get_batches()
