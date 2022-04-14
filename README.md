@@ -5,7 +5,7 @@ Below one can see a plot of the training loss. As can be seen, the model learns 
 
   ![trainloss](/figures/trainloss.png)
   
-Below a visualization of some random predicted trajectories. At first sight the result looks very promomsing, these plots are however deceiving. Because of time constraints we only got the model to work for a prediction horizon of 1 timestep. Thus, even when the  
+Below a visualization of some random predicted trajectories. At first sight the result looks very promomsing, these plots are however deceiving. Because of time constraints we only got the model to work for a prediction horizon of 1 timestep. This means that if we predict a velocity of 0 at every time step, our prediction for the next timestep will be the same as the current timestep. But since we only have a prediction horizon of 1, the current true position is updated at every prediction, resulting in a noisy prediction which lags behind. So even though the plots look visually pleasing and succesful, the learned model is of no use in any practical application. 
 ![Figure3](/figures/Figure_3.png)
 ![Figure9](/figures/Figure_9.png)
 ![Figure10](/figures/Figure_10.png)
