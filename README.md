@@ -1,8 +1,8 @@
 # Reproducing Trajectron++
 
-Maarten Hugenholtz | 4649516 | M.D.Hugenholtz@student.tudelft.nl
-Mats van der Gulik | 4651286 | M.A.vanderGulik@student.tudelft.nl
-Stijn Lafontaine   | 4908457 | S.C.Lafontaine@student.tudelft.nl
+Maarten Hugenholtz | 4649516 | M.D.Hugenholtz@student.tudelft.nl \
+Mats van der Gulik | 4651286 | M.A.vanderGulik@student.tudelft.nl \
+Stijn Lafontaine   | 4908457 | S.C.Lafontaine@student.tudelft.nl \
 
 On this repository we have attempted to in part recreate the network proposed in [paper](https://arxiv.org/pdf/2001.03093.pdf). In particular, we sought to evaluate it from purely its textual form and disregard the existing code the authors have created. This was done for two reasons: first, this allowed for a much deeper learning experience for ourselves. Secondly, this provides a highly valuable perspective; in the pragmatic and empirical world of deep learning, papers can at times feel disjointed from their material, and come across as formal translations of a code base rather than as its conceptual foundation. Gradually, we came to the conclusion that completely ignoring the author’s code was not feasible, however, since crucial information for the implementation (voorbeeld) of the network was left out of the paper. Meaningful results were not obtained. We believe that this has to do with vanishing gradient(s) possibly caused by a mistake made in the conversion the loss function from its mathematical denotation to functioning code.
 
